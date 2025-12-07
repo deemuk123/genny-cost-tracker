@@ -12,9 +12,15 @@ import {
 } from '@/components/ui/select';
 import { useGeneratorStore } from '@/store/generatorStore';
 import { FuelType } from '@/types/generator';
-import { BarChart3, Check, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { BarChart3, Check, TrendingUp, TrendingDown } from 'lucide-react';
+import { format, subMonths } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { 
+  getCurrentNepaliDate,
+  getNepaliMonthName,
+  getNepaliMonthRange,
+  NEPALI_MONTHS
+} from '@/lib/nepaliCalendar';
 
 export function MonthlyStock() {
   const { 
@@ -25,14 +31,29 @@ export function MonthlyStock() {
     addMonthlyStockCheck 
   } = useGeneratorStore();
   
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const nepaliDate = getCurrentNepaliDate();
+  const [selectedNepaliMonth, setSelectedNepaliMonth] = useState(`${nepaliDate.year}-${nepaliDate.month}`);
   const [fuelType, setFuelType] = useState<FuelType>('diesel');
   const [physicalStock, setPhysicalStock] = useState('');
 
-  // Get the date range for the selected month
-  const monthDate = new Date(selectedMonth + '-01');
-  const monthStart = startOfMonth(monthDate);
-  const monthEnd = endOfMonth(monthDate);
+  // Parse selected Nepali month
+  const [selectedYear, selectedMonth] = selectedNepaliMonth.split('-').map(Number);
+  
+  // Get the date range for the selected Nepali month
+  const { start: monthStart, end: monthEnd } = getNepaliMonthRange(selectedYear, selectedMonth);
+
+  // Generate Nepali month options
+  const nepaliMonthOptions = [];
+  for (let y = nepaliDate.year; y >= nepaliDate.year - 2; y--) {
+    for (let m = 12; m >= 1; m--) {
+      nepaliMonthOptions.push({ 
+        year: y, 
+        month: m, 
+        value: `${y}-${m}`,
+        label: `${getNepaliMonthName(m)} ${y} BS` 
+      });
+    }
+  }
 
   // Calculate stock movement for the month
   const stockMovement = useMemo(() => {
@@ -72,7 +93,7 @@ export function MonthlyStock() {
 
   // Check if there's already a stock check for this month
   const existingCheck = monthlyStockChecks.find(
-    c => c.fuelType === fuelType && format(new Date(c.date), 'yyyy-MM') === selectedMonth
+    c => c.fuelType === fuelType && format(new Date(c.date), 'yyyy-MM') === format(monthEnd, 'yyyy-MM')
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -139,12 +160,25 @@ export function MonthlyStock() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Month</Label>
-                  <Input
-                    type="month"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                  />
+                  <Label>Nepali Month</Label>
+                  <Select
+                    value={selectedNepaliMonth}
+                    onValueChange={setSelectedNepaliMonth}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {nepaliMonthOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {format(monthStart, 'MMM d')} - {format(monthEnd, 'MMM d, yyyy')}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Fuel Type</Label>
@@ -284,7 +318,7 @@ export function MonthlyStock() {
                           {check.fuelType}
                         </span>
                         <span className="font-medium">
-                          {format(new Date(check.date), 'MMMM yyyy')}
+                          {format(new Date(check.date), 'MMM yyyy')}
                         </span>
                       </div>
                       <span className={`font-heading font-bold flex items-center gap-1 ${
