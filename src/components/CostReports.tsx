@@ -14,6 +14,13 @@ import { useGeneratorStore } from '@/store/generatorStore';
 import { GeneratorReport } from '@/types/generator';
 import { BarChart3, Clock, Fuel, IndianRupee, TrendingUp, Download } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { 
+  getCurrentNepaliDate, 
+  getNepaliMonthName,
+  getFiscalYear,
+  getFiscalYearMonths,
+  getNepaliMonthRange 
+} from '@/lib/nepaliCalendar';
 
 export function CostReports() {
   const { 
@@ -24,9 +31,45 @@ export function CostReports() {
   } = useGeneratorStore();
   
   const today = new Date();
+  const nepaliDate = getCurrentNepaliDate();
   const [fromDate, setFromDate] = useState(format(startOfMonth(today), 'yyyy-MM-dd'));
   const [toDate, setToDate] = useState(format(endOfMonth(today), 'yyyy-MM-dd'));
   const [filterGeneratorId, setFilterGeneratorId] = useState('all');
+  const [periodType, setPeriodType] = useState<'custom' | 'nepali-month' | 'fy'>('custom');
+  const [selectedNepaliMonth, setSelectedNepaliMonth] = useState(`${nepaliDate.year}-${nepaliDate.month}`);
+  const [selectedFY, setSelectedFY] = useState(nepaliDate.month >= 4 ? nepaliDate.year : nepaliDate.year - 1);
+
+  // Get available Nepali months for selection
+  const nepaliMonthOptions = [];
+  for (let y = nepaliDate.year; y >= nepaliDate.year - 2; y--) {
+    for (let m = 12; m >= 1; m--) {
+      nepaliMonthOptions.push({ year: y, month: m, label: `${getNepaliMonthName(m)} ${y} BS` });
+    }
+  }
+
+  // Get fiscal year options
+  const fyOptions = [];
+  for (let y = selectedFY; y >= selectedFY - 3; y--) {
+    fyOptions.push({ year: y, label: `FY ${y}/${y + 1}` });
+  }
+
+  // Handle period type changes
+  const handleNepaliMonthChange = (value: string) => {
+    setSelectedNepaliMonth(value);
+    const [year, month] = value.split('-').map(Number);
+    const range = getNepaliMonthRange(year, month);
+    setFromDate(format(range.start, 'yyyy-MM-dd'));
+    setToDate(format(range.end, 'yyyy-MM-dd'));
+  };
+
+  const handleFYChange = (year: number) => {
+    setSelectedFY(year);
+    const months = getFiscalYearMonths(year);
+    const startRange = getNepaliMonthRange(months[0].year, months[0].month);
+    const endRange = getNepaliMonthRange(months[11].year, months[11].month);
+    setFromDate(format(startRange.start, 'yyyy-MM-dd'));
+    setToDate(format(endRange.end, 'yyyy-MM-dd'));
+  };
 
   const activeGenerators = generators.filter(g => g.isActive);
 
@@ -83,45 +126,125 @@ export function CostReports() {
       {/* Filters */}
       <Card>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>From Date</Label>
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>To Date</Label>
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Generator</Label>
-              <Select
-                value={filterGeneratorId}
-                onValueChange={setFilterGeneratorId}
+          <div className="space-y-4">
+            {/* Period Type Selector */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={periodType === 'nepali-month' ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setPeriodType('nepali-month');
+                  handleNepaliMonthChange(selectedNepaliMonth);
+                }}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Generators</SelectItem>
-                  {activeGenerators.map(gen => (
-                    <SelectItem key={gen.id} value={gen.id}>{gen.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button variant="outline" className="w-full">
-                <Download className="w-4 h-4" />
-                Export
+                Nepali Month
               </Button>
+              <Button
+                variant={periodType === 'fy' ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setPeriodType('fy');
+                  handleFYChange(selectedFY);
+                }}
+              >
+                Fiscal Year
+              </Button>
+              <Button
+                variant={periodType === 'custom' ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setPeriodType('custom')}
+              >
+                Custom Range
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {periodType === 'nepali-month' && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Nepali Month</Label>
+                  <Select
+                    value={selectedNepaliMonth}
+                    onValueChange={handleNepaliMonthChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {nepaliMonthOptions.map(opt => (
+                        <SelectItem key={`${opt.year}-${opt.month}`} value={`${opt.year}-${opt.month}`}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {periodType === 'fy' && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Fiscal Year (Shrawan - Ashadh)</Label>
+                  <Select
+                    value={selectedFY.toString()}
+                    onValueChange={(v) => handleFYChange(parseInt(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fyOptions.map(opt => (
+                        <SelectItem key={opt.year} value={opt.year.toString()}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {periodType === 'custom' && (
+                <>
+                  <div className="space-y-2">
+                    <Label>From Date</Label>
+                    <Input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>To Date</Label>
+                    <Input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="space-y-2">
+                <Label>Generator</Label>
+                <Select
+                  value={filterGeneratorId}
+                  onValueChange={setFilterGeneratorId}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Generators</SelectItem>
+                    {activeGenerators.map(gen => (
+                      <SelectItem key={gen.id} value={gen.id}>{gen.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button variant="outline" className="w-full">
+                  <Download className="w-4 h-4" />
+                  Export
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>

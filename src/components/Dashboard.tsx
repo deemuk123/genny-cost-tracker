@@ -1,7 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useGeneratorStore } from '@/store/generatorStore';
 import { Clock, Fuel, Zap, TrendingUp, AlertTriangle } from 'lucide-react';
-import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { 
+  getCurrentNepaliDate, 
+  getNepaliMonthName, 
+  getFiscalYear,
+  formatBothDates 
+} from '@/lib/nepaliCalendar';
 
 export function Dashboard() {
   const { generators, hourReadings, fuelStock, fuelIssues, getTotalHoursForPeriod } = useGeneratorStore();
@@ -67,7 +73,11 @@ export function Dashboard() {
       <div>
         <h1 className="text-3xl font-heading font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground mt-1">
-          Overview of your generator operations for {format(today, 'MMMM yyyy')}
+          Overview for {getNepaliMonthName(getCurrentNepaliDate().month)} {getCurrentNepaliDate().year} BS
+          <span className="text-muted-foreground/70"> • {format(today, 'MMMM yyyy')}</span>
+        </p>
+        <p className="text-sm text-primary mt-1">
+          {getFiscalYear(today)}
         </p>
       </div>
 
@@ -211,8 +221,8 @@ export function Dashboard() {
                       </div>
                       <div>
                         <p className="font-medium">{gen?.name || 'Unknown'}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(issue.date), 'MMM dd, yyyy')}
+                      <p className="text-sm text-muted-foreground">
+                          {formatBothDates(new Date(issue.date))}
                         </p>
                       </div>
                     </div>
