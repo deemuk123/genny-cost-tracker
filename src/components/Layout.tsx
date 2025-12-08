@@ -12,6 +12,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
+import { canAccess } from '@/lib/permissions';
+import { RoleIndicator } from '@/components/RoleIndicator';
 
 interface LayoutProps {
   children: ReactNode;
@@ -21,7 +24,9 @@ interface LayoutProps {
   onSidebarToggle: () => void;
 }
 
-const navItems = [
+type FeatureId = 'dashboard' | 'generators' | 'hours' | 'purchase' | 'issue' | 'stock' | 'reports';
+
+const navItems: { id: FeatureId; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'generators', label: 'Generators', icon: Settings },
   { id: 'hours', label: 'Hour Meter Entry', icon: Clock },
@@ -32,6 +37,13 @@ const navItems = [
 ];
 
 export function Layout({ children, activeTab, onTabChange, sidebarCollapsed, onSidebarToggle }: LayoutProps) {
+  const { user } = useAuth();
+  
+  // Filter nav items based on user role
+  const filteredNavItems = navItems.filter(item => 
+    user ? canAccess(user.role, item.id) : true
+  );
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       {/* Sidebar */}
@@ -54,9 +66,16 @@ export function Layout({ children, activeTab, onTabChange, sidebarCollapsed, onS
           )}
         </div>
 
+        {/* Role Indicator */}
+        {!sidebarCollapsed && user && (
+          <div className="px-3 py-2">
+            <RoleIndicator />
+          </div>
+        )}
+
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1">
-          {navItems.map((item) => (
+          {filteredNavItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
