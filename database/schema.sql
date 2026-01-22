@@ -9,10 +9,26 @@
 
 -- For MySQL, use ENUM directly in column definitions
 CREATE TYPE fuel_type AS ENUM ('diesel', 'petrol');
-CREATE TYPE app_role AS ENUM ('admin', 'operator', 'viewer');
+CREATE TYPE app_role AS ENUM ('super_admin', 'admin', 'maintenance', 'operator', 'viewer');
 
 -- ============================================
--- 2. USER ROLES TABLE
+-- 2. USERS TABLE
+-- ============================================
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(200),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_login TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_active ON users(is_active);
+
+-- ============================================
+-- 3. USER ROLES TABLE
 -- ============================================
 
 CREATE TABLE user_roles (
@@ -24,6 +40,40 @@ CREATE TABLE user_roles (
 );
 
 CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
+
+-- ============================================
+-- 4. API KEYS TABLE (For External System Access)
+-- ============================================
+
+CREATE TABLE api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key_hash VARCHAR(64) NOT NULL, -- SHA-256 hash of the key
+    key_prefix VARCHAR(10) NOT NULL, -- First 8 chars for display
+    name VARCHAR(100) NOT NULL, -- Description like "ERP System"
+    permissions TEXT[] DEFAULT ARRAY['reports:read'],
+    created_by UUID REFERENCES users(id),
+    expires_at TIMESTAMP WITH TIME ZONE,
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_api_keys_hash ON api_keys(key_hash);
+CREATE INDEX idx_api_keys_active ON api_keys(is_active);
+
+-- ============================================
+-- 5. INSERT SUPER ADMIN USER
+-- ============================================
+
+-- Insert super user (deepesh.k.sharma@gmail.com)
+INSERT INTO users (email, name, is_active) 
+VALUES ('deepesh.k.sharma@gmail.com', 'Deepesh K. Sharma', true)
+ON CONFLICT (email) DO NOTHING;
+
+-- Assign super_admin role
+INSERT INTO user_roles (user_id, role)
+SELECT id, 'super_admin' FROM users WHERE email = 'deepesh.k.sharma@gmail.com'
+ON CONFLICT (user_id, role) DO NOTHING;
 
 -- ============================================
 -- 3. GENERATORS TABLE
@@ -159,7 +209,7 @@ CREATE INDEX idx_stock_checks_date ON monthly_stock_checks(check_date);
 CREATE INDEX idx_stock_checks_fuel_type ON monthly_stock_checks(fuel_type);
 
 -- ============================================
--- 9. HELPER FUNCTIONS
+-- HELPER FUNCTIONS
 -- ============================================
 
 -- Function to check user role
@@ -178,7 +228,7 @@ AS $$
     )
 $$;
 
--- Function to get user's highest role
+-- Function to get user's highest role (priority: super_admin > admin > maintenance > operator > viewer)
 CREATE OR REPLACE FUNCTION get_user_role(_user_id UUID)
 RETURNS app_role
 LANGUAGE SQL
@@ -190,11 +240,36 @@ AS $$
     WHERE user_id = _user_id 
     ORDER BY 
         CASE role 
-            WHEN 'admin' THEN 1 
-            WHEN 'operator' THEN 2 
-            WHEN 'viewer' THEN 3 
+            WHEN 'super_admin' THEN 1
+            WHEN 'admin' THEN 2
+            WHEN 'maintenance' THEN 3 
+            WHEN 'operator' THEN 4 
+            WHEN 'viewer' THEN 5 
         END
     LIMIT 1
+$$;
+
+-- Function to validate API key
+CREATE OR REPLACE FUNCTION validate_api_key(_key_hash VARCHAR(64))
+RETURNS TABLE(id UUID, permissions TEXT[])
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT ak.id, ak.permissions
+    FROM api_keys ak
+    WHERE ak.key_hash = _key_hash
+      AND ak.is_active = true
+      AND (ak.expires_at IS NULL OR ak.expires_at > NOW())
+$$;
+
+-- Function to update API key last used timestamp
+CREATE OR REPLACE FUNCTION update_api_key_usage(_key_id UUID)
+RETURNS VOID
+LANGUAGE SQL
+AS $$
+    UPDATE api_keys SET last_used_at = NOW() WHERE id = _key_id
 $$;
 
 -- Function to get last hour reading for a generator

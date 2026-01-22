@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 
-export type UserRole = 'admin' | 'operator' | 'viewer';
+export type UserRole = 'super_admin' | 'admin' | 'maintenance' | 'operator' | 'viewer';
 
 export interface User {
   id: string;
@@ -28,9 +28,9 @@ export function useAuth(): AuthContextType {
     return {
       user: {
         id: 'dev-user',
-        name: 'Development User',
-        email: 'dev@example.com',
-        role: 'admin',
+        name: 'Deepesh K. Sharma',
+        email: 'deepesh.k.sharma@gmail.com',
+        role: 'super_admin',
         token: 'dev-token',
       },
       isAuthenticated: true,

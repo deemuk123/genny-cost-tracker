@@ -1,11 +1,13 @@
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, UserRole } from '@/hooks/useAuth';
 import { Badge } from '@/components/ui/badge';
-import { Shield, User, Eye } from 'lucide-react';
+import { Shield, User, Eye, Crown, Wrench, Gauge } from 'lucide-react';
 
-const roleConfig = {
-  admin: { label: 'Admin', icon: Shield, variant: 'default' as const },
-  operator: { label: 'Operator', icon: User, variant: 'secondary' as const },
-  viewer: { label: 'Viewer', icon: Eye, variant: 'outline' as const },
+const roleConfig: Record<UserRole, { label: string; icon: typeof Shield; variant: 'default' | 'secondary' | 'outline' }> = {
+  super_admin: { label: 'Super Admin', icon: Crown, variant: 'default' },
+  admin: { label: 'Admin', icon: Shield, variant: 'default' },
+  maintenance: { label: 'Maintenance', icon: Wrench, variant: 'secondary' },
+  operator: { label: 'Operator', icon: Gauge, variant: 'secondary' },
+  viewer: { label: 'Viewer', icon: Eye, variant: 'outline' },
 };
 
 export function RoleIndicator() {

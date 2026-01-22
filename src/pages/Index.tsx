@@ -7,6 +7,8 @@ import { FuelPurchase } from '@/components/FuelPurchase';
 import { FuelIssue } from '@/components/FuelIssue';
 import { MonthlyStock } from '@/components/MonthlyStock';
 import { CostReports } from '@/components/CostReports';
+import { UserManagement } from '@/components/UserManagement';
+import { ApiKeyManagement } from '@/components/ApiKeyManagement';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -28,6 +30,10 @@ const Index = () => {
         return <MonthlyStock />;
       case 'reports':
         return <CostReports />;
+      case 'users':
+        return <UserManagement />;
+      case 'api-keys':
+        return <ApiKeyManagement />;
       default:
         return <Dashboard />;
     }
