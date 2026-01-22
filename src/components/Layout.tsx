@@ -8,7 +8,9 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Zap
+  Zap,
+  Users,
+  Key
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -24,7 +26,7 @@ interface LayoutProps {
   onSidebarToggle: () => void;
 }
 
-type FeatureId = 'dashboard' | 'generators' | 'hours' | 'purchase' | 'issue' | 'stock' | 'reports';
+type FeatureId = 'dashboard' | 'generators' | 'hours' | 'purchase' | 'issue' | 'stock' | 'reports' | 'users' | 'api-keys';
 
 const navItems: { id: FeatureId; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -34,6 +36,8 @@ const navItems: { id: FeatureId; label: string; icon: typeof LayoutDashboard }[]
   { id: 'issue', label: 'Issue Fuel', icon: Droplets },
   { id: 'stock', label: 'Monthly Stock', icon: BarChart3 },
   { id: 'reports', label: 'Cost Reports', icon: BarChart3 },
+  { id: 'users', label: 'User Management', icon: Users },
+  { id: 'api-keys', label: 'API Keys', icon: Key },
 ];
 
 export function Layout({ children, activeTab, onTabChange, sidebarCollapsed, onSidebarToggle }: LayoutProps) {

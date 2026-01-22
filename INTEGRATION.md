@@ -64,9 +64,15 @@ function App() {
 
 | Role | Access |
 |------|--------|
+| **Super Admin** | Full access + User Management + API Keys |
 | **Admin** | Full access to all features |
+| **Maintenance** | Dashboard, Hour Meter Entry, Issue Fuel, Monthly Stock, Cost Reports |
 | **Operator** | Dashboard, Hour Meter Entry, Issue Fuel |
 | **Viewer** | Dashboard, Cost Reports (read-only) |
+
+### Default Super Admin
+- Email: `deepesh.k.sharma@gmail.com`
+- Role: `super_admin` (cannot be changed or deactivated)
 
 ---
 
@@ -101,6 +107,70 @@ Implement these endpoints in your backend:
 
 ### Reports
 - `GET /api/generator/reports/cost` - Cost report (query: from, to, generatorId)
+
+### User Management (Super Admin only)
+- `GET /api/users` - List all users
+- `POST /api/users` - Create user
+- `PUT /api/users/:id` - Update user
+- `PUT /api/users/:id/roles` - Update user role
+- `POST /api/users/:id/deactivate` - Deactivate user
+- `POST /api/users/:id/reactivate` - Reactivate user
+
+### API Keys (Super Admin only)
+- `GET /api/api-keys` - List API keys
+- `POST /api/api-keys` - Generate new API key
+- `DELETE /api/api-keys/:id` - Revoke API key
+
+### External API (for other systems)
+- `GET /api/generator/external/cost-report` - Get cost report data
+
+---
+
+## External API Integration
+
+External systems can request cost report data using API keys.
+
+### Endpoint
+```
+GET /api/generator/external/cost-report?from=2024-01-01&to=2024-01-31
+Authorization: Bearer <API_KEY>
+```
+
+### Response Format
+```json
+{
+  "success": true,
+  "data": {
+    "period": {
+      "from": "2024-01-01",
+      "to": "2024-01-31",
+      "nepaliPeriod": "Magh 2080 BS"
+    },
+    "generators": [
+      {
+        "id": "uuid",
+        "name": "Main Building DG",
+        "totalHours": 245.5,
+        "totalFuelUsed": 612.5,
+        "avgConsumption": 2.49,
+        "totalFuelCost": 58187.50,
+        "hourlyCost": 237.02
+      }
+    ],
+    "totals": {
+      "totalHours": 450.2,
+      "totalFuelUsed": 1125.0,
+      "totalFuelCost": 106875.00,
+      "avgHourlyCost": 237.40
+    }
+  },
+  "generatedAt": "2024-01-31T10:30:00Z"
+}
+```
+
+### Rate Limiting
+- 100 requests per hour per API key
+- All requests are logged for audit
 
 ---
 
