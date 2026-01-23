@@ -26,7 +26,6 @@ Create/update your `.env` file:
 ```env
 # API Configuration
 VITE_API_BASE_URL=/api/generator
-VITE_USE_API=true
 ```
 
 ### 4. Integrate with Your Auth System
@@ -76,6 +75,65 @@ function App() {
 
 ---
 
+## Authentication API
+
+Your backend needs to implement these authentication endpoints:
+
+### POST /api/auth/login
+
+Login with email and password.
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword"
+}
+```
+
+**Response:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "uuid",
+    "name": "John Doe",
+    "email": "user@example.com",
+    "role": "admin"
+  }
+}
+```
+
+### GET /api/auth/me
+
+Get current user profile. Requires Bearer token.
+
+**Headers:**
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "name": "John Doe",
+  "email": "user@example.com",
+  "role": "admin",
+  "isActive": true
+}
+```
+
+### POST /api/auth/logout
+
+Invalidate current session.
+
+### POST /api/auth/refresh
+
+Refresh JWT token before expiration.
+
+---
+
 ## Backend API Endpoints
 
 Implement these endpoints in your backend:
@@ -121,22 +179,44 @@ Implement these endpoints in your backend:
 - `POST /api/api-keys` - Generate new API key
 - `DELETE /api/api-keys/:id` - Revoke API key
 
-### External API (for other systems)
-- `GET /api/generator/external/cost-report` - Get cost report data
-
 ---
 
 ## External API Integration
 
-External systems can request cost report data using API keys.
+External systems can request cost report data using API keys. This allows your ERP, analytics dashboard, or other systems to fetch generator data programmatically.
 
 ### Endpoint
+
 ```
-GET /api/generator/external/cost-report?from=2024-01-01&to=2024-01-31
-Authorization: Bearer <API_KEY>
+GET /api/generator/external/cost-report
+```
+
+### Authentication
+
+Use a Bearer token with your API key:
+
+```
+Authorization: Bearer gk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `from` | string | Yes | Start date (YYYY-MM-DD) |
+| `to` | string | Yes | End date (YYYY-MM-DD) |
+| `generatorId` | string | No | Filter by specific generator |
+
+### Example Request
+
+```bash
+curl -X GET \
+  "https://your-domain.com/api/generator/external/cost-report?from=2024-01-01&to=2024-01-31" \
+  -H "Authorization: Bearer gk_live_8x7y6z5w4v3u2t1s0r9q8p7o6n5m4l3k"
 ```
 
 ### Response Format
+
 ```json
 {
   "success": true,
@@ -148,50 +228,171 @@ Authorization: Bearer <API_KEY>
     },
     "generators": [
       {
-        "id": "uuid",
+        "id": "uuid-1",
         "name": "Main Building DG",
+        "fuelType": "diesel",
         "totalHours": 245.5,
         "totalFuelUsed": 612.5,
         "avgConsumption": 2.49,
         "totalFuelCost": 58187.50,
         "hourlyCost": 237.02
+      },
+      {
+        "id": "uuid-2",
+        "name": "Backup DG",
+        "fuelType": "diesel",
+        "totalHours": 120.3,
+        "totalFuelUsed": 301.2,
+        "avgConsumption": 2.50,
+        "totalFuelCost": 28614.00,
+        "hourlyCost": 237.85
       }
     ],
     "totals": {
-      "totalHours": 450.2,
-      "totalFuelUsed": 1125.0,
-      "totalFuelCost": 106875.00,
-      "avgHourlyCost": 237.40
+      "totalHours": 365.8,
+      "totalFuelUsed": 913.7,
+      "totalFuelCost": 86801.50,
+      "avgHourlyCost": 237.30
     }
   },
   "generatedAt": "2024-01-31T10:30:00Z"
 }
 ```
 
+### Error Responses
+
+**401 Unauthorized**
+```json
+{
+  "success": false,
+  "error": "Invalid or expired API key"
+}
+```
+
+**400 Bad Request**
+```json
+{
+  "success": false,
+  "error": "Missing required parameters: from, to"
+}
+```
+
+**429 Too Many Requests**
+```json
+{
+  "success": false,
+  "error": "Rate limit exceeded. Maximum 100 requests per hour."
+}
+```
+
 ### Rate Limiting
-- 100 requests per hour per API key
-- All requests are logged for audit
+
+- **100 requests per hour** per API key
+- Rate limit headers are included in responses:
+  - `X-RateLimit-Limit: 100`
+  - `X-RateLimit-Remaining: 95`
+  - `X-RateLimit-Reset: 1704067200`
+
+### Code Examples
+
+**JavaScript/Node.js:**
+```javascript
+const axios = require('axios');
+
+async function getCostReport(from, to) {
+  const response = await axios.get(
+    'https://your-domain.com/api/generator/external/cost-report',
+    {
+      params: { from, to },
+      headers: {
+        'Authorization': `Bearer ${process.env.GENERATOR_API_KEY}`
+      }
+    }
+  );
+  return response.data;
+}
+
+// Usage
+const report = await getCostReport('2024-01-01', '2024-01-31');
+console.log(`Total hours: ${report.data.totals.totalHours}`);
+```
+
+**Python:**
+```python
+import requests
+import os
+
+def get_cost_report(from_date, to_date, generator_id=None):
+    url = "https://your-domain.com/api/generator/external/cost-report"
+    headers = {
+        "Authorization": f"Bearer {os.environ['GENERATOR_API_KEY']}"
+    }
+    params = {
+        "from": from_date,
+        "to": to_date
+    }
+    if generator_id:
+        params["generatorId"] = generator_id
+    
+    response = requests.get(url, headers=headers, params=params)
+    response.raise_for_status()
+    return response.json()
+
+# Usage
+report = get_cost_report("2024-01-01", "2024-01-31")
+print(f"Total fuel cost: ₹{report['data']['totals']['totalFuelCost']}")
+```
+
+**C#/.NET:**
+```csharp
+using System.Net.Http.Headers;
+
+public async Task<CostReport> GetCostReportAsync(string from, string to)
+{
+    var client = new HttpClient();
+    client.DefaultRequestHeaders.Authorization = 
+        new AuthenticationHeaderValue("Bearer", Environment.GetEnvironmentVariable("GENERATOR_API_KEY"));
+    
+    var response = await client.GetAsync(
+        $"https://your-domain.com/api/generator/external/cost-report?from={from}&to={to}"
+    );
+    
+    response.EnsureSuccessStatusCode();
+    return await response.Content.ReadFromJsonAsync<CostReport>();
+}
+```
 
 ---
 
 ## Database Schema
 
-```sql
--- See the full schema in the project's SQL documentation
-CREATE TABLE generators (...);
-CREATE TABLE hour_meter_readings (...);
-CREATE TABLE fuel_purchases (...);
-CREATE TABLE fuel_issues (...);
-CREATE TABLE monthly_stock_checks (...);
-```
+See `database/schema.sql` for the complete database schema including:
+- `generators` - Generator master data
+- `hour_meter_readings` - Daily hour readings
+- `fuel_purchases` - Fuel purchase records
+- `fuel_issues` - Fuel issued to generators
+- `monthly_stock_checks` - Monthly physical stock counts
+- `users` - User accounts
+- `api_keys` - External API keys
 
 ---
 
-## Development Mode
+## Security Considerations
 
-For standalone development without your backend:
-- Set `VITE_USE_API=false` to use localStorage persistence
-- The module will use mock data and local state
+1. **API Keys**
+   - Keys are hashed using SHA-256 before storage
+   - Never log or expose full API keys
+   - Set expiration dates for production keys
+   - Revoke keys immediately if compromised
+
+2. **Authentication**
+   - JWT tokens expire after 24 hours
+   - Use HTTPS in production
+   - Implement proper CORS policies
+
+3. **Rate Limiting**
+   - External API: 100 requests/hour
+   - All requests are logged for audit
 
 ---
 

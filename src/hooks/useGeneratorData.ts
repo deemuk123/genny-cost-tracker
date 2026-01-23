@@ -3,15 +3,11 @@ import { generatorApi, hourReadingApi, fuelPurchaseApi, fuelIssueApi, stockCheck
 import { Generator, HourMeterReading, FuelPurchase, FuelIssue, MonthlyStockCheck } from '@/types/generator';
 import { useToast } from '@/hooks/use-toast';
 
-// Check if we should use API or local store
-const USE_API = import.meta.env.VITE_USE_API === 'true';
-
 // Generators Hooks
 export function useGenerators() {
   return useQuery({
     queryKey: ['generators'],
     queryFn: generatorApi.getAll,
-    enabled: USE_API,
   });
 }
 
@@ -68,7 +64,14 @@ export function useHourReadings(params?: { generatorId?: string; from?: string; 
   return useQuery({
     queryKey: ['hourReadings', params],
     queryFn: () => hourReadingApi.getAll(params),
-    enabled: USE_API,
+  });
+}
+
+export function useLastHourReading(generatorId: string) {
+  return useQuery({
+    queryKey: ['hourReadings', 'last', generatorId],
+    queryFn: () => hourReadingApi.getLastReading(generatorId),
+    enabled: !!generatorId,
   });
 }
 
@@ -93,7 +96,6 @@ export function useFuelPurchases(params?: { from?: string; to?: string; fuelType
   return useQuery({
     queryKey: ['fuelPurchases', params],
     queryFn: () => fuelPurchaseApi.getAll(params),
-    enabled: USE_API,
   });
 }
 
@@ -118,7 +120,6 @@ export function useFuelStock() {
   return useQuery({
     queryKey: ['fuelStock'],
     queryFn: fuelPurchaseApi.getStock,
-    enabled: USE_API,
   });
 }
 
@@ -127,7 +128,6 @@ export function useFuelIssues(params?: { generatorId?: string; from?: string; to
   return useQuery({
     queryKey: ['fuelIssues', params],
     queryFn: () => fuelIssueApi.getAll(params),
-    enabled: USE_API,
   });
 }
 
@@ -153,7 +153,6 @@ export function useStockChecks(params?: { year?: number; month?: number }) {
   return useQuery({
     queryKey: ['stockChecks', params],
     queryFn: () => stockCheckApi.getAll(params),
-    enabled: USE_API,
   });
 }
 
@@ -178,6 +177,6 @@ export function useCostReport(params: { from: string; to: string; generatorId?: 
   return useQuery({
     queryKey: ['costReport', params],
     queryFn: () => reportsApi.getCostReport(params),
-    enabled: USE_API && !!params.from && !!params.to,
+    enabled: !!params.from && !!params.to,
   });
 }
