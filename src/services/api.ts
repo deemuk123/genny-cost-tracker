@@ -4,7 +4,7 @@ import { Generator, HourMeterReading, FuelPurchase, FuelIssue, MonthlyStockCheck
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/generator';
 
 function getAuthHeaders(): HeadersInit {
-  const token = localStorage.getItem('auth_token');
+  const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

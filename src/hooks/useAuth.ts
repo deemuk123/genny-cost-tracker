@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { createContext, useContext } from 'react';
 
 export type UserRole = 'super_admin' | 'admin' | 'maintenance' | 'operator' | 'viewer';
 
@@ -10,7 +10,7 @@ export interface User {
   token: string;
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -18,31 +18,14 @@ interface AuthContextType {
   logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   
-  // If no context, return a mock for standalone development
   if (!context) {
-    return {
-      user: {
-        id: 'dev-user',
-        name: 'Deepesh K. Sharma',
-        email: 'deepesh.k.sharma@gmail.com',
-        role: 'super_admin',
-        token: 'dev-token',
-      },
-      isAuthenticated: true,
-      isLoading: false,
-      login: async () => {},
-      logout: () => {},
-    };
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   
   return context;
 }
-
-// Export context for parent app integration
-export { AuthContext };
-export type { AuthContextType };

@@ -13,36 +13,10 @@ import { useToast } from '@/hooks/use-toast';
 import { apiKeyApi } from '@/services/userApi';
 import { ApiKey, CreateApiKeyRequest } from '@/types/user';
 
-// Mock data for development
-const mockApiKeys: ApiKey[] = [
-  {
-    id: '1',
-    name: 'ERP System Integration',
-    keyPrefix: 'gk_live_8x',
-    permissions: ['reports:read'],
-    createdBy: '1',
-    createdByName: 'Deepesh K. Sharma',
-    isActive: true,
-    createdAt: '2024-01-15',
-    lastUsedAt: '2024-03-10',
-  },
-  {
-    id: '2',
-    name: 'Analytics Dashboard',
-    keyPrefix: 'gk_live_4y',
-    permissions: ['reports:read'],
-    createdBy: '1',
-    createdByName: 'Deepesh K. Sharma',
-    isActive: true,
-    createdAt: '2024-02-20',
-    expiresAt: '2025-02-20',
-  },
-];
 
 export function ApiKeyManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const useApi = import.meta.env.VITE_USE_API === 'true';
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
@@ -53,10 +27,9 @@ export function ApiKeyManagement() {
   });
 
   // Fetch API keys
-  const { data: apiKeys = mockApiKeys } = useQuery({
+  const { data: apiKeys = [] } = useQuery({
     queryKey: ['api-keys'],
     queryFn: apiKeyApi.getAll,
-    enabled: useApi,
   });
 
   // Create API key mutation
@@ -86,14 +59,7 @@ export function ApiKeyManagement() {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    // For demo, generate a mock key
-    if (!useApi) {
-      const mockSecretKey = `gk_live_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 34)}`;
-      setNewKeySecret(mockSecretKey);
-      toast({ title: 'API key created successfully' });
-    } else {
-      createKeyMutation.mutate(formData);
-    }
+    createKeyMutation.mutate(formData);
   };
 
   const copyToClipboard = (text: string) => {

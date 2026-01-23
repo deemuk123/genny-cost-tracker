@@ -22,19 +22,11 @@ const roleConfig: Record<UserRole, { label: string; icon: typeof Crown; color: s
   viewer: { label: 'Viewer', icon: Eye, color: 'bg-muted text-muted-foreground border-border' },
 };
 
-// Mock data for development
-const mockUsers: User[] = [
-  { id: '1', email: 'deepesh.k.sharma@gmail.com', name: 'Deepesh K. Sharma', role: 'super_admin', isActive: true, createdAt: '2024-01-01' },
-  { id: '2', email: 'ram@example.com', name: 'Ram Bahadur', role: 'maintenance', isActive: true, createdAt: '2024-01-15' },
-  { id: '3', email: 'sita@example.com', name: 'Sita Kumari', role: 'operator', isActive: true, createdAt: '2024-02-01' },
-  { id: '4', email: 'hari@example.com', name: 'Hari Prasad', role: 'viewer', isActive: false, createdAt: '2024-02-10' },
-];
 
 export function UserManagement() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
-  const useApi = import.meta.env.VITE_USE_API === 'true';
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -46,10 +38,9 @@ export function UserManagement() {
   });
 
   // Fetch users
-  const { data: users = mockUsers, isLoading } = useQuery({
+  const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: userApi.getAll,
-    enabled: useApi,
   });
 
   // Create user mutation
