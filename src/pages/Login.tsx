@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { authApi } from '@/services/authApi';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -27,18 +27,29 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await authApi.login(formData.email, formData.password);
-      
-      // Store token
-      if (formData.rememberMe) {
-        localStorage.setItem('auth_token', response.token);
-      } else {
-        sessionStorage.setItem('auth_token', response.token);
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (authError) {
+        throw authError;
       }
+
+      if (!data.user) {
+        throw new Error('Login failed. Please try again.');
+      }
+
+      // Get user profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', data.user.id)
+        .single();
 
       toast({
         title: 'Login successful',
-        description: `Welcome back, ${response.user.name}!`,
+        description: `Welcome back, ${profile?.name || data.user.email}!`,
       });
 
       // Navigate to dashboard

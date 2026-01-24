@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, ReactNode } from 'react';
 import { AuthContext, User, UserRole } from '@/hooks/useAuth';
-import { authApi } from '@/services/authApi';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -10,73 +10,85 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Get token from storage
-  const getToken = useCallback(() => {
-    return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-  }, []);
-
-  // Check auth on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = getToken();
-      
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const userData = await authApi.getProfile();
-        setUser({
-          id: userData.id,
-          name: userData.name,
-          email: userData.email,
-          role: userData.role as UserRole,
-          token,
-        });
-      } catch (error) {
-        // Token is invalid, clear it
-        localStorage.removeItem('auth_token');
-        sessionStorage.removeItem('auth_token');
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, [getToken]);
-
-  // Login function
-  const login = useCallback(async (token: string) => {
-    localStorage.setItem('auth_token', token);
-    
+  // Fetch user profile and role
+  const fetchUserData = useCallback(async (userId: string, email: string) => {
     try {
-      const userData = await authApi.getProfile();
-      setUser({
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-        role: userData.role as UserRole,
-        token,
-      });
+      // Get profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name, is_active')
+        .eq('id', userId)
+        .single();
+
+      // Get role using the database function
+      const { data: roleData } = await supabase
+        .rpc('get_user_role', { _user_id: userId });
+
+      const role = (roleData as UserRole) || 'viewer';
+      
+      if (profile && profile.is_active !== false) {
+        setUser({
+          id: userId,
+          name: profile.name || email.split('@')[0],
+          email,
+          role,
+          token: '', // Token is managed by Supabase
+        });
+      } else {
+        // User is deactivated
+        await supabase.auth.signOut();
+        setUser(null);
+      }
     } catch (error) {
-      localStorage.removeItem('auth_token');
-      throw error;
+      console.error('Error fetching user data:', error);
+      setUser(null);
     }
   }, []);
+
+  // Set up auth state listener
+  useEffect(() => {
+    // First set up the listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          // Use setTimeout to avoid potential race conditions
+          setTimeout(() => {
+            fetchUserData(session.user.id, session.user.email || '');
+          }, 0);
+        } else {
+          setUser(null);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    // Then check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchUserData(session.user.id, session.user.email || '');
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchUserData]);
+
+  // Login function (kept for compatibility, but Supabase handles this)
+  const login = useCallback(async (_token: string) => {
+    // This is handled by Supabase auth state change
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await fetchUserData(session.user.id, session.user.email || '');
+    }
+  }, [fetchUserData]);
 
   // Logout function
   const logout = useCallback(async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      // Ignore logout errors
-    } finally {
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
-      setUser(null);
-    }
+    await supabase.auth.signOut();
+    setUser(null);
   }, []);
 
   const value = {
