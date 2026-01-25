@@ -3,52 +3,57 @@
 
 ### Overview
 
-This plan will create the complete backend infrastructure for the Generator Hours and Cost Tracker system using Lovable Cloud. It includes database tables for all entities, Row-Level Security policies, helper functions, triggers, and a service layer to connect the frontend.
+This plan will create the full backend infrastructure for the Generator Hours and Cost Tracker, including:
+1. Database tables for generators, hour meter readings, fuel purchases, fuel issues, fuel stock, monthly stock checks, and API keys
+2. Database triggers for automatic stock management
+3. Helper functions for reports
+4. RLS policies for role-based access control
+5. Updated frontend to connect to the database via Supabase
+6. External API endpoint for data sharing
+7. Super admin setup with credentials: `deepesh.k.sharma@gmail.com` / `Root@132#`
 
 ---
 
-### Phase 1: Database Schema - Core Tables
+### Phase 1: Database Migration
 
-**1.1 Create fuel_type ENUM**
+Create a new database migration with all core tables:
 
+**1.1 fuel_type ENUM**
 ```sql
-CREATE TYPE fuel_type AS ENUM ('diesel', 'petrol');
+CREATE TYPE public.fuel_type AS ENUM ('diesel', 'petrol');
 ```
 
-**1.2 Create Generators Table**
-
+**1.2 Generators Table**
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
-| name | VARCHAR(100) | Generator name (e.g., "DG-1") |
+| name | VARCHAR(100) | Generator name |
 | generator_id | VARCHAR(50) | Optional custom ID |
 | location | VARCHAR(200) | Physical location |
-| capacity_kva | DECIMAL(10,2) | Power capacity in kVA |
+| capacity_kva | DECIMAL(10,2) | Power capacity |
 | fuel_type | fuel_type | Diesel or Petrol |
-| start_date | DATE | When tracking started |
-| initial_hour_reading | DECIMAL(10,2) | Starting hour meter value |
+| start_date | DATE | Tracking start date |
+| initial_hour_reading | DECIMAL(10,2) | Starting hour meter |
 | initial_fuel_stock | DECIMAL(10,2) | Initial fuel allocated |
 | is_active | BOOLEAN | Active status |
 | created_by | UUID | User who created |
 | created_at | TIMESTAMPTZ | Creation timestamp |
 | updated_at | TIMESTAMPTZ | Last update |
 
-**1.3 Create Hour Meter Readings Table**
-
+**1.3 Hour Meter Readings Table**
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
 | generator_id | UUID | FK to generators |
 | date | DATE | Reading date |
-| opening_hour | DECIMAL(10,2) | Start of day reading |
-| closing_hour | DECIMAL(10,2) | End of day reading |
-| hours_run | DECIMAL(10,2) | Calculated (closing - opening) |
+| opening_hour | DECIMAL(10,2) | Start reading |
+| closing_hour | DECIMAL(10,2) | End reading |
+| hours_run | DECIMAL(10,2) | Calculated |
 | notes | TEXT | Optional notes |
 | created_by | UUID | User who created |
 | created_at | TIMESTAMPTZ | Creation timestamp |
 
-**1.4 Create Fuel Purchases Table**
-
+**1.4 Fuel Purchases Table**
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
@@ -63,31 +68,28 @@ CREATE TYPE fuel_type AS ENUM ('diesel', 'petrol');
 | created_by | UUID | User who created |
 | created_at | TIMESTAMPTZ | Creation timestamp |
 
-**1.5 Create Fuel Issues Table**
-
+**1.5 Fuel Issues Table**
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
 | date | DATE | Issue date |
 | generator_id | UUID | FK to generators |
-| fuel_type | fuel_type | Must match generator fuel type |
+| fuel_type | fuel_type | Must match generator |
 | quantity_litres | DECIMAL(10,2) | Amount issued |
 | stock_after_issue | DECIMAL(10,2) | Running balance |
 | notes | TEXT | Optional notes |
 | created_by | UUID | User who created |
 | created_at | TIMESTAMPTZ | Creation timestamp |
 
-**1.6 Create Fuel Stock Table**
-
+**1.6 Fuel Stock Table**
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
-| fuel_type | fuel_type | Unique per fuel type |
-| quantity_litres | DECIMAL(10,2) | Current stock level |
+| fuel_type | fuel_type | Unique per type |
+| quantity_litres | DECIMAL(10,2) | Current stock |
 | updated_at | TIMESTAMPTZ | Last update |
 
-**1.7 Create Monthly Stock Checks Table**
-
+**1.7 Monthly Stock Checks Table**
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
@@ -98,15 +100,14 @@ CREATE TYPE fuel_type AS ENUM ('diesel', 'petrol');
 | opening_stock | DECIMAL(10,2) | Starting stock |
 | total_purchases | DECIMAL(10,2) | Sum of purchases |
 | total_issues | DECIMAL(10,2) | Sum of issues |
-| theoretical_closing | DECIMAL(10,2) | Calculated closing |
+| theoretical_closing | DECIMAL(10,2) | Calculated |
 | physical_closing | DECIMAL(10,2) | Actual count |
 | variance | DECIMAL(10,2) | Difference |
 | notes | TEXT | Optional notes |
 | created_by | UUID | User who created |
 | created_at | TIMESTAMPTZ | Creation timestamp |
 
-**1.8 Create API Keys Table**
-
+**1.8 API Keys Table**
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
@@ -122,227 +123,278 @@ CREATE TYPE fuel_type AS ENUM ('diesel', 'petrol');
 
 ---
 
-### Phase 2: Database Triggers and Functions
+### Phase 2: Database Triggers
 
 **2.1 Auto-update Stock After Purchase**
-
-When a fuel purchase is inserted, automatically increase the corresponding fuel stock.
-
 ```sql
-CREATE FUNCTION update_stock_after_purchase() RETURNS TRIGGER
--- Adds purchased quantity to fuel_stock table
+CREATE OR REPLACE FUNCTION public.update_stock_after_purchase()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.fuel_stock (fuel_type, quantity_litres)
+    VALUES (NEW.fuel_type, NEW.quantity_litres)
+    ON CONFLICT (fuel_type) 
+    DO UPDATE SET 
+        quantity_litres = fuel_stock.quantity_litres + NEW.quantity_litres,
+        updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
 **2.2 Auto-update Stock After Issue**
-
-When fuel is issued, automatically decrease the corresponding fuel stock and record the remaining balance.
-
 ```sql
-CREATE FUNCTION update_stock_after_issue() RETURNS TRIGGER
--- Subtracts issued quantity from fuel_stock
--- Sets stock_after_issue field
+CREATE OR REPLACE FUNCTION public.update_stock_after_issue()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_stock DECIMAL(10,2);
+BEGIN
+    SELECT quantity_litres INTO current_stock 
+    FROM public.fuel_stock 
+    WHERE fuel_type = NEW.fuel_type;
+    
+    NEW.stock_after_issue := COALESCE(current_stock, 0) - NEW.quantity_litres;
+    
+    UPDATE public.fuel_stock 
+    SET quantity_litres = NEW.stock_after_issue,
+        updated_at = NOW()
+    WHERE fuel_type = NEW.fuel_type;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
-**2.3 Get Last Hour Reading Function**
-
-Returns the most recent closing hour for a generator, or initial reading if none exists.
-
+**2.3 Calculate Hours Run**
 ```sql
-CREATE FUNCTION get_last_hour_reading(generator_id UUID) RETURNS DECIMAL
+CREATE OR REPLACE FUNCTION public.calculate_hours_run()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.hours_run := NEW.closing_hour - NEW.opening_hour;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
-**2.4 Calculate Total Hours Function**
-
-Returns sum of hours_run for a generator within a date range.
-
+**2.4 Calculate Total Amount**
 ```sql
-CREATE FUNCTION get_total_hours(generator_id UUID, from_date DATE, to_date DATE) RETURNS DECIMAL
-```
-
-**2.5 Calculate Total Fuel Issued Function**
-
-Returns sum of fuel issued to a generator within a date range.
-
-```sql
-CREATE FUNCTION get_total_fuel_issued(generator_id UUID, from_date DATE, to_date DATE) RETURNS DECIMAL
-```
-
-**2.6 Get Average Fuel Cost Function**
-
-Returns weighted average cost per litre for a fuel type within a date range.
-
-```sql
-CREATE FUNCTION get_avg_fuel_cost(fuel_type, from_date DATE, to_date DATE) RETURNS DECIMAL
+CREATE OR REPLACE FUNCTION public.calculate_total_amount()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.total_amount := NEW.quantity_litres * NEW.rate_per_litre;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
 ---
 
-### Phase 3: Row-Level Security Policies
+### Phase 3: Helper Functions for Reports
 
-**3.1 Generators Table RLS**
-
-| Policy | Access | Condition |
-|--------|--------|-----------|
-| View generators | SELECT | All authenticated users |
-| Create generator | INSERT | Admin, Maintenance roles |
-| Update generator | UPDATE | Admin, Maintenance roles |
-| Deactivate generator | UPDATE | Admin only |
-
-**3.2 Hour Meter Readings RLS**
-
-| Policy | Access | Condition |
-|--------|--------|-----------|
-| View readings | SELECT | All authenticated users |
-| Create reading | INSERT | Admin, Maintenance, Operator roles |
-| Update own readings | UPDATE | Creator or Admin |
-
-**3.3 Fuel Purchases RLS**
-
-| Policy | Access | Condition |
-|--------|--------|-----------|
-| View purchases | SELECT | All authenticated users |
-| Create purchase | INSERT | Admin, Maintenance roles |
-| Update purchase | UPDATE | Admin only |
-
-**3.4 Fuel Issues RLS**
-
-| Policy | Access | Condition |
-|--------|--------|-----------|
-| View issues | SELECT | All authenticated users |
-| Create issue | INSERT | Admin, Maintenance, Operator roles |
-| Update issue | UPDATE | Admin only |
-
-**3.5 Fuel Stock RLS**
-
-| Policy | Access | Condition |
-|--------|--------|-----------|
-| View stock | SELECT | All authenticated users |
-| Update stock | UPDATE | System triggers only |
-
-**3.6 Monthly Stock Checks RLS**
-
-| Policy | Access | Condition |
-|--------|--------|-----------|
-| View checks | SELECT | All authenticated users |
-| Create check | INSERT | Admin, Maintenance roles |
-| Update check | UPDATE | Admin only |
-
-**3.7 API Keys RLS**
-
-| Policy | Access | Condition |
-|--------|--------|-----------|
-| View keys | SELECT | Super Admin only |
-| Manage keys | ALL | Super Admin only |
+**3.1 Get Last Hour Reading**
+```sql
+CREATE OR REPLACE FUNCTION public.get_last_hour_reading(p_generator_id UUID)
+RETURNS DECIMAL AS $$
+DECLARE
+    last_reading DECIMAL(10,2);
+    initial_reading DECIMAL(10,2);
+BEGIN
+    SELECT closing_hour INTO last_reading
+    FROM public.hour_meter_readings
+    WHERE generator_id = p_generator_id
+    ORDER BY date DESC, created_at DESC
+    LIMIT 1;
+    
+    IF last_reading IS NULL THEN
+        SELECT initial_hour_reading INTO initial_reading
+        FROM public.generators
+        WHERE id = p_generator_id;
+        RETURN COALESCE(initial_reading, 0);
+    END IF;
+    
+    RETURN last_reading;
+END;
+$$ LANGUAGE plpgsql;
+```
 
 ---
 
-### Phase 4: Reporting Views
+### Phase 4: Row-Level Security Policies
 
-**4.1 Generator Summary View**
+**Generators Table RLS**
+- All authenticated users can view active generators
+- Admin/Maintenance roles can create/update
+- Only Admin can deactivate
 
-Provides current status of each generator including:
-- Current hour reading
-- Total hours run since start
-- Total fuel consumed
+**Hour Meter Readings RLS**
+- All authenticated users can view
+- Admin/Maintenance/Operator roles can create
+- Creator or Admin can update
 
-**4.2 Cost Report Function**
+**Fuel Purchases RLS**
+- All authenticated users can view
+- Admin/Maintenance roles can create
+- Only Admin can update/delete
 
-A database function that calculates:
-- Total hours per generator for a date range
-- Total fuel issued per generator
-- Average consumption (litres per hour)
-- Total fuel cost (using weighted average rate)
-- Hourly running cost
+**Fuel Issues RLS**
+- All authenticated users can view
+- Admin/Maintenance/Operator roles can create
+- Only Admin can update/delete
 
----
+**Fuel Stock RLS**
+- All authenticated users can view
+- Only system triggers can update
 
-### Phase 5: Update Frontend Services
+**Monthly Stock Checks RLS**
+- All authenticated users can view
+- Admin/Maintenance roles can create
+- Only Admin can update
 
-**5.1 Create Supabase API Service**
-
-Replace the fetch-based `api.ts` with Supabase client calls:
-
-| Function | Implementation |
-|----------|----------------|
-| generatorApi.getAll | `supabase.from('generators').select('*')` |
-| generatorApi.create | `supabase.from('generators').insert(...)` |
-| hourReadingApi.getAll | `supabase.from('hour_meter_readings').select('*')` |
-| fuelPurchaseApi.create | `supabase.from('fuel_purchases').insert(...)` |
-| fuelIssueApi.create | `supabase.from('fuel_issues').insert(...)` |
-
-**5.2 Update React Query Hooks**
-
-Update `useGeneratorData.ts` to use Supabase client instead of REST API.
-
-**5.3 Update Components**
-
-Update Dashboard and form components to use the new Supabase-backed hooks.
+**API Keys RLS**
+- Only Super Admin can view and manage
 
 ---
 
-### Phase 6: External API Endpoint
+### Phase 5: Update Frontend Service Layer
 
-**6.1 Create Cost Report Edge Function**
+**5.1 Create New API Service (`src/services/api.ts`)**
 
-Create an edge function for external systems to request cost data:
+Replace the fetch-based API with direct Supabase calls:
 
-**Endpoint:** `GET /functions/v1/external-cost-report`
+```typescript
+import { supabase } from '@/integrations/supabase/client';
 
-**Authentication:** API Key via Bearer token
+export const generatorApi = {
+  getAll: async () => {
+    const { data, error } = await supabase
+      .from('generators')
+      .select('*')
+      .order('name');
+    if (error) throw error;
+    return data;
+  },
+  
+  create: async (data) => {
+    const { data: result, error } = await supabase
+      .from('generators')
+      .insert({
+        ...data,
+        created_by: (await supabase.auth.getUser()).data.user?.id
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return result;
+  },
+  // ... more methods
+};
+```
 
-**Parameters:**
-- `from` - Start date (YYYY-MM-DD)
-- `to` - End date (YYYY-MM-DD)
-- `generatorId` - Optional filter
+**5.2 Update React Query Hooks (`src/hooks/useGeneratorData.ts`)**
 
-**Response:**
+Keep the existing hook structure but ensure they call the updated API service.
+
+---
+
+### Phase 6: Update Frontend Components
+
+All components currently using `useGeneratorStore` will be updated to use React Query hooks instead:
+
+| Component | Changes |
+|-----------|---------|
+| `Dashboard.tsx` | Replace store calls with hooks |
+| `GeneratorSetup.tsx` | Use `useGenerators`, `useAddGenerator` |
+| `HourMeterEntry.tsx` | Use `useHourReadings`, `useAddHourReading` |
+| `FuelPurchase.tsx` | Use `useFuelPurchases`, `useAddFuelPurchase`, `useFuelStock` |
+| `FuelIssue.tsx` | Use `useFuelIssues`, `useAddFuelIssue`, `useFuelStock` |
+| `MonthlyStock.tsx` | Use `useStockChecks`, `useAddStockCheck` |
+| `CostReports.tsx` | Use `useCostReport` |
+
+---
+
+### Phase 7: External API Endpoint
+
+**Create Edge Function: `external-cost-report`**
+
+```
+GET /functions/v1/external-cost-report
+Authorization: Bearer <API_KEY>
+Query Params: from, to, generatorId (optional)
+```
+
+Response format:
 ```json
 {
   "success": true,
   "data": {
-    "period": { "from": "...", "to": "..." },
-    "generators": [...],
-    "totals": {...}
+    "period": { "from": "2024-01-01", "to": "2024-01-31" },
+    "generators": [
+      {
+        "id": "uuid",
+        "name": "DG-1",
+        "totalHours": 245.5,
+        "totalFuelUsed": 612.5,
+        "avgConsumption": 2.49,
+        "totalFuelCost": 58187.50,
+        "hourlyCost": 237.02
+      }
+    ],
+    "totals": {
+      "totalHours": 450.2,
+      "totalFuelUsed": 1125.0,
+      "totalFuelCost": 106875.00
+    }
   }
 }
 ```
 
 ---
 
-### Files to Create/Modify
+### Phase 8: Super Admin Setup
 
-| Action | File | Purpose |
-|--------|------|---------|
-| Create | Migration SQL | All tables, triggers, functions, RLS |
-| Modify | `src/services/api.ts` | Use Supabase client |
-| Modify | `src/hooks/useGeneratorData.ts` | Update query functions |
-| Modify | `src/components/Dashboard.tsx` | Use Supabase hooks |
-| Modify | `src/components/GeneratorSetup.tsx` | Use Supabase mutations |
-| Modify | `src/components/HourMeterEntry.tsx` | Use Supabase mutations |
-| Modify | `src/components/FuelPurchase.tsx` | Use Supabase mutations |
-| Modify | `src/components/FuelIssue.tsx` | Use Supabase mutations |
-| Modify | `src/components/MonthlyStock.tsx` | Use Supabase mutations |
-| Modify | `src/components/CostReports.tsx` | Use Supabase for reports |
-| Create | `supabase/functions/external-cost-report/index.ts` | External API |
+Call the existing `setup-admin` edge function with:
+- Email: `deepesh.k.sharma@gmail.com`
+- Password: `Root@132#`
+- Role: `super_admin`
 
 ---
 
-### Security Features
+### Files to Create
 
-1. **Row-Level Security** - All tables protected based on user roles
-2. **Role-based Access** - Using existing `has_role()` function
-3. **API Key Authentication** - For external system access
-4. **Audit Trail** - `created_by` on all records
-5. **Data Validation** - Database constraints and triggers
+| File | Purpose |
+|------|---------|
+| `supabase/migrations/[timestamp]_create_generator_tables.sql` | All core tables, triggers, functions, RLS |
+| `supabase/functions/external-cost-report/index.ts` | External API endpoint |
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/services/api.ts` | Replace with Supabase client calls |
+| `src/hooks/useGeneratorData.ts` | Update to use new API service |
+| `src/components/Dashboard.tsx` | Use React Query hooks |
+| `src/components/GeneratorSetup.tsx` | Use React Query hooks |
+| `src/components/HourMeterEntry.tsx` | Use React Query hooks |
+| `src/components/FuelPurchase.tsx` | Use React Query hooks |
+| `src/components/FuelIssue.tsx` | Use React Query hooks |
+| `src/components/MonthlyStock.tsx` | Use React Query hooks |
+| `src/components/CostReports.tsx` | Use React Query hooks |
+| `src/store/generatorStore.ts` | Remove or simplify (optional, for local UI state only) |
 
 ---
 
-### Summary
+### Security Summary
 
-After implementation:
-- All generator data stored in the database with proper relationships
-- Automatic stock calculations via triggers
-- Role-based access control on all operations
-- External API for third-party systems
-- Full audit trail of all changes
-- Preserved history even after generator deactivation
+1. **Row-Level Security** on all tables based on user roles
+2. **Role-based access control** using `has_role()` function
+3. **API Key authentication** for external systems (hashed with SHA-256)
+4. **Audit trail** with `created_by` on all records
+5. **Data validation** via database triggers
+
+---
+
+### Credentials
+
+After implementation, login with:
+- **Email**: `deepesh.k.sharma@gmail.com`
+- **Password**: `Root@132#`
+- **Role**: `super_admin` (full system access)
