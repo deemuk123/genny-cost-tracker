@@ -14,6 +14,295 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          permissions: string[]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          permissions?: string[]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          permissions?: string[]
+        }
+        Relationships: []
+      }
+      fuel_issues: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date: string
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          generator_id: string
+          id: string
+          notes: string | null
+          quantity_litres: number
+          stock_after_issue: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date: string
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          generator_id: string
+          id?: string
+          notes?: string | null
+          quantity_litres: number
+          stock_after_issue?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          fuel_type?: Database["public"]["Enums"]["fuel_type"]
+          generator_id?: string
+          id?: string
+          notes?: string | null
+          quantity_litres?: number
+          stock_after_issue?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fuel_issues_generator_id_fkey"
+            columns: ["generator_id"]
+            isOneToOne: false
+            referencedRelation: "generators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fuel_purchases: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date: string
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          id: string
+          invoice_number: string | null
+          notes: string | null
+          quantity_litres: number
+          rate_per_litre: number
+          total_amount: number | null
+          vendor: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date: string
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          id?: string
+          invoice_number?: string | null
+          notes?: string | null
+          quantity_litres: number
+          rate_per_litre: number
+          total_amount?: number | null
+          vendor?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          fuel_type?: Database["public"]["Enums"]["fuel_type"]
+          id?: string
+          invoice_number?: string | null
+          notes?: string | null
+          quantity_litres?: number
+          rate_per_litre?: number
+          total_amount?: number | null
+          vendor?: string | null
+        }
+        Relationships: []
+      }
+      fuel_stock: {
+        Row: {
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          id: string
+          quantity_litres: number
+          updated_at: string
+        }
+        Insert: {
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          id?: string
+          quantity_litres?: number
+          updated_at?: string
+        }
+        Update: {
+          fuel_type?: Database["public"]["Enums"]["fuel_type"]
+          id?: string
+          quantity_litres?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      generators: {
+        Row: {
+          capacity_kva: number | null
+          created_at: string
+          created_by: string | null
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          generator_id: string | null
+          id: string
+          initial_fuel_stock: number | null
+          initial_hour_reading: number
+          is_active: boolean
+          location: string | null
+          name: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_kva?: number | null
+          created_at?: string
+          created_by?: string | null
+          fuel_type?: Database["public"]["Enums"]["fuel_type"]
+          generator_id?: string | null
+          id?: string
+          initial_fuel_stock?: number | null
+          initial_hour_reading?: number
+          is_active?: boolean
+          location?: string | null
+          name: string
+          start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_kva?: number | null
+          created_at?: string
+          created_by?: string | null
+          fuel_type?: Database["public"]["Enums"]["fuel_type"]
+          generator_id?: string | null
+          id?: string
+          initial_fuel_stock?: number | null
+          initial_hour_reading?: number
+          is_active?: boolean
+          location?: string | null
+          name?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hour_meter_readings: {
+        Row: {
+          closing_hour: number
+          created_at: string
+          created_by: string | null
+          date: string
+          generator_id: string
+          hours_run: number | null
+          id: string
+          notes: string | null
+          opening_hour: number
+        }
+        Insert: {
+          closing_hour: number
+          created_at?: string
+          created_by?: string | null
+          date: string
+          generator_id: string
+          hours_run?: number | null
+          id?: string
+          notes?: string | null
+          opening_hour: number
+        }
+        Update: {
+          closing_hour?: number
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          generator_id?: string
+          hours_run?: number | null
+          id?: string
+          notes?: string | null
+          opening_hour?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hour_meter_readings_generator_id_fkey"
+            columns: ["generator_id"]
+            isOneToOne: false
+            referencedRelation: "generators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_stock_checks: {
+        Row: {
+          check_date: string
+          created_at: string
+          created_by: string | null
+          fiscal_month: string | null
+          fiscal_year: string | null
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          id: string
+          notes: string | null
+          opening_stock: number
+          physical_closing: number
+          theoretical_closing: number | null
+          total_issues: number
+          total_purchases: number
+          variance: number | null
+        }
+        Insert: {
+          check_date: string
+          created_at?: string
+          created_by?: string | null
+          fiscal_month?: string | null
+          fiscal_year?: string | null
+          fuel_type: Database["public"]["Enums"]["fuel_type"]
+          id?: string
+          notes?: string | null
+          opening_stock?: number
+          physical_closing: number
+          theoretical_closing?: number | null
+          total_issues?: number
+          total_purchases?: number
+          variance?: number | null
+        }
+        Update: {
+          check_date?: string
+          created_at?: string
+          created_by?: string | null
+          fiscal_month?: string | null
+          fiscal_year?: string | null
+          fuel_type?: Database["public"]["Enums"]["fuel_type"]
+          id?: string
+          notes?: string | null
+          opening_stock?: number
+          physical_closing?: number
+          theoretical_closing?: number | null
+          total_issues?: number
+          total_purchases?: number
+          variance?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -67,6 +356,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_avg_fuel_cost: {
+        Args: {
+          p_from_date: string
+          p_fuel_type: Database["public"]["Enums"]["fuel_type"]
+          p_to_date: string
+        }
+        Returns: number
+      }
+      get_last_hour_reading: {
+        Args: { p_generator_id: string }
+        Returns: number
+      }
+      get_total_fuel_issued: {
+        Args: { p_from_date: string; p_generator_id: string; p_to_date: string }
+        Returns: number
+      }
+      get_total_hours: {
+        Args: { p_from_date: string; p_generator_id: string; p_to_date: string }
+        Returns: number
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -78,9 +387,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      update_api_key_usage: { Args: { p_key_id: string }; Returns: undefined }
+      validate_api_key: {
+        Args: { p_key_hash: string }
+        Returns: {
+          key_id: string
+          permissions: string[]
+        }[]
+      }
     }
     Enums: {
       app_role: "super_admin" | "admin" | "maintenance" | "operator" | "viewer"
+      fuel_type: "diesel" | "petrol"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -209,6 +527,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["super_admin", "admin", "maintenance", "operator", "viewer"],
+      fuel_type: ["diesel", "petrol"],
     },
   },
 } as const

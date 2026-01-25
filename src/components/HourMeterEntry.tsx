@@ -1,41 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import { useGeneratorStore } from '@/store/generatorStore';
-import { Clock, AlertCircle, Check, ArrowRight } from 'lucide-react';
+import { useGenerators, useHourReadings, useAddHourReading, useLastHourReading } from '@/hooks/useGeneratorData';
+import { hourReadingApi } from '@/services/api';
+import { Clock, AlertCircle, Check, ArrowRight, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
 
 export function HourMeterEntry() {
-  const { generators, hourReadings, addHourReading, getLastReading } = useGeneratorStore();
+  const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [entries, setEntries] = useState<Record<string, string>>({});
+  const [openingHours, setOpeningHours] = useState<Record<string, number>>({});
   
-  const activeGenerators = generators.filter(g => g.isActive);
+  const { data: hourReadings = [], isLoading: loadingReadings } = useHourReadings();
+  const addHourReading = useAddHourReading();
+  
+  const activeGenerators = generators.filter(g => g.is_active);
+
+  // Fetch opening hours for all active generators
+  useEffect(() => {
+    const fetchOpeningHours = async () => {
+      const hours: Record<string, number> = {};
+      for (const gen of activeGenerators) {
+        try {
+          const lastReading = await hourReadingApi.getLastReading(gen.id);
+          hours[gen.id] = lastReading;
+        } catch {
+          hours[gen.id] = gen.initial_hour_reading || 0;
+        }
+      }
+      setOpeningHours(hours);
+    };
+    
+    if (activeGenerators.length > 0) {
+      fetchOpeningHours();
+    }
+  }, [activeGenerators.length]);
 
   const getOpeningHour = (generatorId: string) => {
-    const lastReading = getLastReading(generatorId);
-    if (lastReading) {
-      return lastReading.closingHour;
-    }
-    const gen = generators.find(g => g.id === generatorId);
-    return gen?.initialHourReading || 0;
+    return openingHours[generatorId] ?? 0;
   };
 
   const hasEntryForDate = (generatorId: string, date: string) => {
-    return hourReadings.some(r => r.generatorId === generatorId && r.date === date);
+    return hourReadings.some(r => r.generator_id === generatorId && r.date === date);
   };
 
-  const handleSubmit = (generatorId: string) => {
+  const handleSubmit = async (generatorId: string) => {
     const closingHour = parseFloat(entries[generatorId]);
     const openingHour = getOpeningHour(generatorId);
     
@@ -66,43 +80,58 @@ export function HourMeterEntry() {
       return;
     }
 
-    addHourReading({
-      generatorId,
-      date: selectedDate,
-      openingHour,
-      closingHour,
-    });
+    try {
+      await addHourReading.mutateAsync({
+        generator_id: generatorId,
+        date: selectedDate,
+        opening_hour: openingHour,
+        closing_hour: closingHour,
+      });
 
-    const gen = generators.find(g => g.id === generatorId);
-    const hoursRun = closingHour - openingHour;
-    
-    toast({
-      title: 'Entry Saved',
-      description: `${gen?.name} ran for ${hoursRun.toFixed(1)} hours.`,
-    });
+      const gen = generators.find(g => g.id === generatorId);
+      const hoursRun = closingHour - openingHour;
+      
+      toast({
+        title: 'Entry Saved',
+        description: `${gen?.name} ran for ${hoursRun.toFixed(1)} hours.`,
+      });
 
-    setEntries(prev => ({ ...prev, [generatorId]: '' }));
+      setEntries(prev => ({ ...prev, [generatorId]: '' }));
+      // Update opening hours for next entry
+      setOpeningHours(prev => ({ ...prev, [generatorId]: closingHour }));
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save entry',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleSubmitAll = () => {
+  const handleSubmitAll = async () => {
     let successCount = 0;
     
-    activeGenerators.forEach(gen => {
+    for (const gen of activeGenerators) {
       if (entries[gen.id] && !hasEntryForDate(gen.id, selectedDate)) {
         const closingHour = parseFloat(entries[gen.id]);
         const openingHour = getOpeningHour(gen.id);
         
         if (!isNaN(closingHour) && closingHour >= openingHour) {
-          addHourReading({
-            generatorId: gen.id,
-            date: selectedDate,
-            openingHour,
-            closingHour,
-          });
-          successCount++;
+          try {
+            await addHourReading.mutateAsync({
+              generator_id: gen.id,
+              date: selectedDate,
+              opening_hour: openingHour,
+              closing_hour: closingHour,
+            });
+            successCount++;
+            setOpeningHours(prev => ({ ...prev, [gen.id]: closingHour }));
+          } catch (error) {
+            console.error(`Failed to save entry for ${gen.name}:`, error);
+          }
         }
       }
-    });
+    }
 
     if (successCount > 0) {
       toast({
@@ -118,6 +147,16 @@ export function HourMeterEntry() {
       });
     }
   };
+
+  const isLoading = loadingGenerators || loadingReadings;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -147,7 +186,7 @@ export function HourMeterEntry() {
               variant="secondary" 
               size="lg"
               onClick={handleSubmitAll}
-              disabled={activeGenerators.length === 0}
+              disabled={activeGenerators.length === 0 || addHourReading.isPending}
             >
               <Check className="w-5 h-5" />
               Save All Entries
@@ -173,7 +212,7 @@ export function HourMeterEntry() {
             const openingHour = getOpeningHour(gen.id);
             const hasEntry = hasEntryForDate(gen.id, selectedDate);
             const existingEntry = hourReadings.find(
-              r => r.generatorId === gen.id && r.date === selectedDate
+              r => r.generator_id === gen.id && r.date === selectedDate
             );
 
             return (
@@ -192,11 +231,11 @@ export function HourMeterEntry() {
                       <CardDescription>{gen.location}</CardDescription>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      gen.fuelType === 'diesel' 
+                      gen.fuel_type === 'diesel' 
                         ? 'bg-fuel-diesel/10 text-fuel-diesel' 
                         : 'bg-warning/10 text-warning'
                     }`}>
-                      {gen.fuelType}
+                      {gen.fuel_type}
                     </span>
                   </div>
                 </CardHeader>
@@ -209,13 +248,13 @@ export function HourMeterEntry() {
                         <span className="text-sm text-muted-foreground">Closing</span>
                       </div>
                       <div className="flex items-center justify-between font-heading font-bold text-lg">
-                        <span>{existingEntry?.openingHour.toFixed(1)}</span>
-                        <span className="text-success">{existingEntry?.closingHour.toFixed(1)}</span>
+                        <span>{existingEntry?.opening_hour.toFixed(1)}</span>
+                        <span className="text-success">{existingEntry?.closing_hour.toFixed(1)}</span>
                       </div>
                       <div className="text-center mt-3 pt-3 border-t border-success/20">
                         <span className="text-sm text-muted-foreground">Hours Run</span>
                         <p className="font-heading font-bold text-2xl text-success">
-                          {existingEntry?.hoursRun.toFixed(1)} hrs
+                          {(existingEntry?.hours_run || 0).toFixed(1)} hrs
                         </p>
                       </div>
                     </div>
@@ -265,7 +304,7 @@ export function HourMeterEntry() {
                         variant="secondary" 
                         className="w-full"
                         onClick={() => handleSubmit(gen.id)}
-                        disabled={!entries[gen.id] || parseFloat(entries[gen.id]) < openingHour}
+                        disabled={!entries[gen.id] || parseFloat(entries[gen.id]) < openingHour || addHourReading.isPending}
                       >
                         Save Entry
                       </Button>

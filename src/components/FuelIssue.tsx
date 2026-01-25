@@ -10,30 +10,34 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { useGeneratorStore } from '@/store/generatorStore';
-import { Droplets, AlertTriangle, ArrowRight, Fuel } from 'lucide-react';
+import { useGenerators, useFuelIssues, useFuelStock, useAddFuelIssue } from '@/hooks/useGeneratorData';
+import { Droplets, AlertTriangle, ArrowRight, Fuel, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
 export function FuelIssue() {
-  const { generators, fuelIssues, fuelStock, addFuelIssue } = useGeneratorStore();
+  const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
+  const { data: fuelIssues = [], isLoading: loadingIssues } = useFuelIssues();
+  const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
+  const addFuelIssue = useAddFuelIssue();
+  
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
-    generatorId: '',
-    quantity: '',
+    generator_id: '',
+    quantity_litres: '',
   });
 
-  const activeGenerators = generators.filter(g => g.isActive);
-  const selectedGenerator = generators.find(g => g.id === formData.generatorId);
+  const activeGenerators = generators.filter(g => g.is_active);
+  const selectedGenerator = generators.find(g => g.id === formData.generator_id);
   
   const recentIssues = [...fuelIssues]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 10);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.generatorId) {
+    if (!formData.generator_id) {
       toast({
         title: 'Select Generator',
         description: 'Please select a generator to issue fuel to.',
@@ -42,7 +46,7 @@ export function FuelIssue() {
       return;
     }
 
-    const quantity = parseFloat(formData.quantity);
+    const quantity = parseFloat(formData.quantity_litres);
     if (isNaN(quantity) || quantity <= 0) {
       toast({
         title: 'Invalid Quantity',
@@ -52,7 +56,7 @@ export function FuelIssue() {
       return;
     }
 
-    const fuelType = selectedGenerator?.fuelType || 'diesel';
+    const fuelType = selectedGenerator?.fuel_type || 'diesel';
     const currentStock = fuelStock[fuelType];
 
     if (quantity > currentStock) {
@@ -64,30 +68,48 @@ export function FuelIssue() {
       return;
     }
 
-    addFuelIssue({
-      date: formData.date,
-      generatorId: formData.generatorId,
-      fuelType,
-      quantity,
-    });
+    try {
+      await addFuelIssue.mutateAsync({
+        date: formData.date,
+        generator_id: formData.generator_id,
+        fuel_type: fuelType,
+        quantity_litres: quantity,
+      });
 
-    toast({
-      title: 'Fuel Issued',
-      description: `${quantity} L of ${fuelType} issued to ${selectedGenerator?.name}`,
-    });
+      toast({
+        title: 'Fuel Issued',
+        description: `${quantity} L of ${fuelType} issued to ${selectedGenerator?.name}`,
+      });
 
-    setFormData(prev => ({
-      ...prev,
-      generatorId: '',
-      quantity: '',
-    }));
+      setFormData(prev => ({
+        ...prev,
+        generator_id: '',
+        quantity_litres: '',
+      }));
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to issue fuel',
+        variant: 'destructive',
+      });
+    }
   };
 
   const stockAfterIssue = () => {
     if (!selectedGenerator) return null;
-    const quantity = parseFloat(formData.quantity) || 0;
-    return fuelStock[selectedGenerator.fuelType] - quantity;
+    const quantity = parseFloat(formData.quantity_litres) || 0;
+    return fuelStock[selectedGenerator.fuel_type] - quantity;
   };
+
+  const isLoading = loadingGenerators || loadingIssues || loadingStock;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -152,8 +174,8 @@ export function FuelIssue() {
               <div className="space-y-2">
                 <Label>Select Generator</Label>
                 <Select
-                  value={formData.generatorId}
-                  onValueChange={(value) => setFormData({ ...formData, generatorId: value })}
+                  value={formData.generator_id}
+                  onValueChange={(value) => setFormData({ ...formData, generator_id: value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a generator" />
@@ -164,11 +186,11 @@ export function FuelIssue() {
                         <div className="flex items-center gap-2">
                           <span>{gen.name}</span>
                           <span className={`text-xs px-1.5 py-0.5 rounded ${
-                            gen.fuelType === 'diesel' 
+                            gen.fuel_type === 'diesel' 
                               ? 'bg-fuel-diesel/10 text-fuel-diesel' 
                               : 'bg-warning/10 text-warning'
                           }`}>
-                            {gen.fuelType}
+                            {gen.fuel_type}
                           </span>
                         </div>
                       </SelectItem>
@@ -180,10 +202,10 @@ export function FuelIssue() {
               {selectedGenerator && (
                 <div className="p-3 rounded-lg bg-muted/50 text-sm">
                   <p className="text-muted-foreground">
-                    {selectedGenerator.name} uses <span className="font-medium capitalize">{selectedGenerator.fuelType}</span>
+                    {selectedGenerator.name} uses <span className="font-medium capitalize">{selectedGenerator.fuel_type}</span>
                   </p>
                   <p className="text-muted-foreground">
-                    Available: <span className="font-medium">{fuelStock[selectedGenerator.fuelType].toFixed(1)} L</span>
+                    Available: <span className="font-medium">{fuelStock[selectedGenerator.fuel_type].toFixed(1)} L</span>
                   </p>
                 </div>
               )}
@@ -194,12 +216,12 @@ export function FuelIssue() {
                   type="number"
                   step="0.1"
                   placeholder="e.g., 50"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                  value={formData.quantity_litres}
+                  onChange={(e) => setFormData({ ...formData, quantity_litres: e.target.value })}
                 />
               </div>
 
-              {selectedGenerator && formData.quantity && (
+              {selectedGenerator && formData.quantity_litres && (
                 <div className="p-4 rounded-lg bg-accent border border-accent-foreground/10">
                   <div className="flex items-center justify-between text-sm">
                     <span>Current Stock</span>
@@ -207,7 +229,7 @@ export function FuelIssue() {
                     <span>After Issue</span>
                   </div>
                   <div className="flex items-center justify-between font-heading font-bold text-lg mt-2">
-                    <span>{fuelStock[selectedGenerator.fuelType].toFixed(1)} L</span>
+                    <span>{fuelStock[selectedGenerator.fuel_type].toFixed(1)} L</span>
                     <span className={stockAfterIssue()! >= 0 ? 'text-secondary' : 'text-destructive'}>
                       {stockAfterIssue()!.toFixed(1)} L
                     </span>
@@ -227,10 +249,10 @@ export function FuelIssue() {
                 variant="secondary" 
                 className="w-full" 
                 size="lg"
-                disabled={!selectedGenerator || stockAfterIssue()! < 0}
+                disabled={!selectedGenerator || stockAfterIssue()! < 0 || addFuelIssue.isPending}
               >
                 <Droplets className="w-5 h-5" />
-                Issue Fuel
+                {addFuelIssue.isPending ? 'Issuing...' : 'Issue Fuel'}
               </Button>
             </form>
           </CardContent>
@@ -249,7 +271,7 @@ export function FuelIssue() {
             ) : (
               <div className="space-y-3">
                 {recentIssues.map((issue) => {
-                  const gen = generators.find(g => g.id === issue.generatorId);
+                  const gen = generators.find(g => g.id === issue.generator_id);
                   return (
                     <div 
                       key={issue.id}
@@ -257,7 +279,7 @@ export function FuelIssue() {
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          issue.fuelType === 'diesel' ? 'bg-fuel-diesel' : 'bg-warning'
+                          issue.fuel_type === 'diesel' ? 'bg-fuel-diesel' : 'bg-warning'
                         }`}>
                           <Droplets className="w-5 h-5 text-primary-foreground" />
                         </div>
@@ -269,8 +291,8 @@ export function FuelIssue() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-heading font-bold">{issue.quantity} L</p>
-                        <p className="text-sm text-muted-foreground capitalize">{issue.fuelType}</p>
+                        <p className="font-heading font-bold">{issue.quantity_litres} L</p>
+                        <p className="text-sm text-muted-foreground capitalize">{issue.fuel_type}</p>
                       </div>
                     </div>
                   );

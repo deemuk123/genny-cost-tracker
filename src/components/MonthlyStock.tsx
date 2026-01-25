@@ -10,26 +10,23 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { useGeneratorStore } from '@/store/generatorStore';
+import { useFuelPurchases, useFuelIssues, useFuelStock, useStockChecks, useAddStockCheck } from '@/hooks/useGeneratorData';
 import { FuelType } from '@/types/generator';
-import { BarChart3, Check, TrendingUp, TrendingDown } from 'lucide-react';
+import { BarChart3, Check, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { format, subMonths } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { 
   getCurrentNepaliDate,
   getNepaliMonthName,
   getNepaliMonthRange,
-  NEPALI_MONTHS
 } from '@/lib/nepaliCalendar';
 
 export function MonthlyStock() {
-  const { 
-    fuelPurchases, 
-    fuelIssues, 
-    fuelStock, 
-    monthlyStockChecks,
-    addMonthlyStockCheck 
-  } = useGeneratorStore();
+  const { data: fuelPurchases = [], isLoading: loadingPurchases } = useFuelPurchases();
+  const { data: fuelIssues = [], isLoading: loadingIssues } = useFuelIssues();
+  const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
+  const { data: monthlyStockChecks = [], isLoading: loadingChecks } = useStockChecks();
+  const addStockCheck = useAddStockCheck();
   
   const nepaliDate = getCurrentNepaliDate();
   const [selectedNepaliMonth, setSelectedNepaliMonth] = useState(`${nepaliDate.year}-${nepaliDate.month}`);
@@ -60,26 +57,26 @@ export function MonthlyStock() {
     // Get previous month's closing as opening
     const prevMonth = subMonths(monthStart, 1);
     const prevCheck = monthlyStockChecks.find(
-      c => c.fuelType === fuelType && 
-      format(new Date(c.date), 'yyyy-MM') === format(prevMonth, 'yyyy-MM')
+      c => c.fuel_type === fuelType && 
+      format(new Date(c.check_date), 'yyyy-MM') === format(prevMonth, 'yyyy-MM')
     );
-    const opening = prevCheck?.physicalClosing || 0;
+    const opening = prevCheck?.physical_closing || 0;
 
     // Calculate purchases for this month
     const purchases = fuelPurchases
       .filter(p => {
         const date = new Date(p.date);
-        return p.fuelType === fuelType && date >= monthStart && date <= monthEnd;
+        return p.fuel_type === fuelType && date >= monthStart && date <= monthEnd;
       })
-      .reduce((sum, p) => sum + p.quantity, 0);
+      .reduce((sum, p) => sum + p.quantity_litres, 0);
 
     // Calculate issues for this month
     const issues = fuelIssues
       .filter(i => {
         const date = new Date(i.date);
-        return i.fuelType === fuelType && date >= monthStart && date <= monthEnd;
+        return i.fuel_type === fuelType && date >= monthStart && date <= monthEnd;
       })
-      .reduce((sum, i) => sum + i.quantity, 0);
+      .reduce((sum, i) => sum + i.quantity_litres, 0);
 
     const theoretical = opening + purchases - issues;
 
@@ -93,10 +90,10 @@ export function MonthlyStock() {
 
   // Check if there's already a stock check for this month
   const existingCheck = monthlyStockChecks.find(
-    c => c.fuelType === fuelType && format(new Date(c.date), 'yyyy-MM') === format(monthEnd, 'yyyy-MM')
+    c => c.fuel_type === fuelType && format(new Date(c.check_date), 'yyyy-MM') === format(monthEnd, 'yyyy-MM')
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const physical = parseFloat(physicalStock);
@@ -109,33 +106,51 @@ export function MonthlyStock() {
       return;
     }
 
-    addMonthlyStockCheck({
-      date: format(monthEnd, 'yyyy-MM-dd'),
-      fuelType,
-      openingStock: stockMovement.opening,
-      totalPurchases: stockMovement.purchases,
-      totalIssues: stockMovement.issues,
-      theoreticalClosing: stockMovement.theoretical,
-      physicalClosing: physical,
-      variance: physical - stockMovement.theoretical,
-    });
+    try {
+      await addStockCheck.mutateAsync({
+        check_date: format(monthEnd, 'yyyy-MM-dd'),
+        fuel_type: fuelType,
+        fiscal_year: `${selectedYear}/${selectedYear + 1}`,
+        fiscal_month: getNepaliMonthName(selectedMonth),
+        opening_stock: stockMovement.opening,
+        total_purchases: stockMovement.purchases,
+        total_issues: stockMovement.issues,
+        physical_closing: physical,
+      });
 
-    toast({
-      title: 'Stock Check Saved',
-      description: `Monthly stock check for ${fuelType} recorded.`,
-    });
+      toast({
+        title: 'Stock Check Saved',
+        description: `Monthly stock check for ${fuelType} recorded.`,
+      });
 
-    setPhysicalStock('');
+      setPhysicalStock('');
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save stock check',
+        variant: 'destructive',
+      });
+    }
   };
 
   const variance = existingCheck 
-    ? existingCheck.variance 
+    ? existingCheck.variance || 0 
     : (physicalStock ? parseFloat(physicalStock) - stockMovement.theoretical : 0);
 
   // Recent stock checks
   const recentChecks = [...monthlyStockChecks]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort((a, b) => new Date(b.check_date).getTime() - new Date(a.check_date).getTime())
     .slice(0, 6);
+
+  const isLoading = loadingPurchases || loadingIssues || loadingStock || loadingChecks;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -227,17 +242,17 @@ export function MonthlyStock() {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Physical Stock</span>
-                        <span className="font-heading font-bold">{existingCheck.physicalClosing.toFixed(1)} L</span>
+                        <span className="font-heading font-bold">{existingCheck.physical_closing.toFixed(1)} L</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Variance</span>
                         <span className={`font-heading font-bold flex items-center gap-1 ${
-                          existingCheck.variance > 0 ? 'text-success' : 
-                          existingCheck.variance < 0 ? 'text-destructive' : ''
+                          (existingCheck.variance || 0) > 0 ? 'text-success' : 
+                          (existingCheck.variance || 0) < 0 ? 'text-destructive' : ''
                         }`}>
-                          {existingCheck.variance > 0 ? <TrendingUp className="w-4 h-4" /> : 
-                           existingCheck.variance < 0 ? <TrendingDown className="w-4 h-4" /> : null}
-                          {existingCheck.variance > 0 ? '+' : ''}{existingCheck.variance.toFixed(1)} L
+                          {(existingCheck.variance || 0) > 0 ? <TrendingUp className="w-4 h-4" /> : 
+                           (existingCheck.variance || 0) < 0 ? <TrendingDown className="w-4 h-4" /> : null}
+                          {(existingCheck.variance || 0) > 0 ? '+' : ''}{(existingCheck.variance || 0).toFixed(1)} L
                         </span>
                       </div>
                     </div>
@@ -281,9 +296,9 @@ export function MonthlyStock() {
                     </div>
                   )}
 
-                  <Button type="submit" variant="secondary" className="w-full" size="lg">
+                  <Button type="submit" variant="secondary" className="w-full" size="lg" disabled={addStockCheck.isPending}>
                     <Check className="w-5 h-5" />
-                    Save Stock Check
+                    {addStockCheck.isPending ? 'Saving...' : 'Save Stock Check'}
                   </Button>
                 </>
               )}
@@ -311,26 +326,26 @@ export function MonthlyStock() {
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          check.fuelType === 'diesel' 
+                          check.fuel_type === 'diesel' 
                             ? 'bg-fuel-diesel/10 text-fuel-diesel' 
                             : 'bg-warning/10 text-warning'
                         }`}>
-                          {check.fuelType}
+                          {check.fuel_type}
                         </span>
                         <span className="font-medium">
-                          {format(new Date(check.date), 'MMM yyyy')}
+                          {format(new Date(check.check_date), 'MMM yyyy')}
                         </span>
                       </div>
                       <span className={`font-heading font-bold flex items-center gap-1 ${
-                        check.variance > 0 ? 'text-success' : 
-                        check.variance < 0 ? 'text-destructive' : ''
+                        (check.variance || 0) > 0 ? 'text-success' : 
+                        (check.variance || 0) < 0 ? 'text-destructive' : ''
                       }`}>
-                        {check.variance > 0 ? '+' : ''}{check.variance.toFixed(1)} L
+                        {(check.variance || 0) > 0 ? '+' : ''}{(check.variance || 0).toFixed(1)} L
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                      <div>Theoretical: {check.theoreticalClosing.toFixed(1)} L</div>
-                      <div>Physical: {check.physicalClosing.toFixed(1)} L</div>
+                      <div>Theoretical: {(check.theoretical_closing || 0).toFixed(1)} L</div>
+                      <div>Physical: {check.physical_closing.toFixed(1)} L</div>
                     </div>
                   </div>
                 ))}
