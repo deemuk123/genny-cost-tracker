@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Copy, Trash2, Key, AlertTriangle, CheckCircle, Clock, ExternalLink } from 'lucide-react';
+import { Plus, Copy, Trash2, Key, AlertTriangle, CheckCircle, Clock, ExternalLink, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,56 +9,44 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { apiKeyApi } from '@/services/userApi';
-import { ApiKey, CreateApiKeyRequest } from '@/types/user';
-
+import { useApiKeys, useCreateApiKey, useRevokeApiKey } from '@/hooks/useGeneratorData';
 
 export function ApiKeyManagement() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { data: apiKeys = [], isLoading } = useApiKeys();
+  const createKeyMutation = useCreateApiKey();
+  const revokeKeyMutation = useRevokeApiKey();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
-  const [formData, setFormData] = useState<CreateApiKeyRequest>({
+  const [formData, setFormData] = useState({
     name: '',
     permissions: ['reports:read'],
     expiresAt: '',
   });
 
-  // Fetch API keys
-  const { data: apiKeys = [] } = useQuery({
-    queryKey: ['api-keys'],
-    queryFn: apiKeyApi.getAll,
-  });
-
-  // Create API key mutation
-  const createKeyMutation = useMutation({
-    mutationFn: apiKeyApi.create,
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
-      setNewKeySecret(response.secretKey);
-      toast({ title: 'API key created successfully' });
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Failed to create API key', description: error.message, variant: 'destructive' });
-    },
-  });
-
-  // Revoke API key mutation
-  const revokeKeyMutation = useMutation({
-    mutationFn: apiKeyApi.revoke,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
-      toast({ title: 'API key revoked' });
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Failed to revoke key', description: error.message, variant: 'destructive' });
-    },
-  });
-
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    createKeyMutation.mutate(formData);
+    try {
+      const result = await createKeyMutation.mutateAsync({
+        name: formData.name,
+        permissions: formData.permissions,
+        expires_at: formData.expiresAt || null,
+      });
+      setNewKeySecret(result.secretKey);
+      toast({ title: 'API key created successfully' });
+    } catch (error: any) {
+      toast({ title: 'Failed to create API key', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleRevoke = async (id: string) => {
+    try {
+      await revokeKeyMutation.mutateAsync(id);
+      toast({ title: 'API key revoked' });
+    } catch (error: any) {
+      toast({ title: 'Failed to revoke key', description: error.message, variant: 'destructive' });
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -73,8 +60,15 @@ export function ApiKeyManagement() {
     setFormData({ name: '', permissions: ['reports:read'], expiresAt: '' });
   };
 
-  const activeKeys = apiKeys.filter((k) => k.isActive);
-  const totalRequests = 1247; // Mock data
+  const activeKeys = apiKeys.filter((k) => k.is_active);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -206,10 +200,10 @@ export function ApiKeyManagement() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Requests (30d)</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Keys</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{totalRequests.toLocaleString()}</p>
+            <p className="text-2xl font-bold">{apiKeys.length}</p>
           </CardContent>
         </Card>
         <Card>
@@ -235,11 +229,11 @@ export function ApiKeyManagement() {
           <div className="rounded-lg bg-muted p-4 font-mono text-sm">
             <div className="flex items-center justify-between mb-2">
               <Badge variant="outline" className="bg-green-500/10 text-green-600">GET</Badge>
-              <Button variant="ghost" size="sm" onClick={() => copyToClipboard('/api/generator/external/cost-report')}>
+              <Button variant="ghost" size="sm" onClick={() => copyToClipboard(`${window.location.origin}/functions/v1/external-cost-report`)}>
                 <Copy className="w-4 h-4" />
               </Button>
             </div>
-            <code className="text-foreground">/api/generator/external/cost-report?from=2024-01-01&to=2024-01-31</code>
+            <code className="text-foreground break-all">{window.location.origin}/functions/v1/external-cost-report?from=2024-01-01&to=2024-01-31</code>
           </div>
           <div className="mt-4 space-y-2 text-sm text-muted-foreground">
             <p><strong>Headers:</strong> Authorization: Bearer {'<API_KEY>'}</p>
@@ -260,79 +254,83 @@ export function ApiKeyManagement() {
           <CardDescription>Active and revoked API keys</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Key</TableHead>
-                <TableHead>Created By</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Used</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {apiKeys.map((key) => (
-                <TableRow key={key.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Key className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">{key.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <code className="text-sm text-muted-foreground">{key.keyPrefix}...</code>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{key.createdByName}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={key.isActive ? 'default' : 'secondary'}>
-                        {key.isActive ? 'Active' : 'Revoked'}
-                      </Badge>
-                      {key.expiresAt && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Expires {new Date(key.expiresAt).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {key.isActive && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Revoke API Key</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to revoke this API key? Any systems using this key will
-                              immediately lose access. This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => revokeKeyMutation.mutate(key.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Revoke Key
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
-                  </TableCell>
+          {apiKeys.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No API keys created yet.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Used</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {apiKeys.map((key) => (
+                  <TableRow key={key.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Key className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-medium">{key.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <code className="text-sm text-muted-foreground">{key.key_prefix}...</code>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={key.is_active ? 'default' : 'secondary'}>
+                          {key.is_active ? 'Active' : 'Revoked'}
+                        </Badge>
+                        {key.expires_at && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Expires {new Date(key.expires_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {key.is_active && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Revoke API Key</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to revoke this API key? Any systems using this key will
+                                immediately lose access. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleRevoke(key.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Revoke Key
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

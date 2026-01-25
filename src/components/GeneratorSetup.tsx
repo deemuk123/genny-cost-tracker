@@ -30,32 +30,35 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { useGeneratorStore } from '@/store/generatorStore';
+import { useGenerators, useAddGenerator, useDeactivateGenerator } from '@/hooks/useGeneratorData';
 import { Generator, FuelType } from '@/types/generator';
-import { Plus, Settings, MapPin, Fuel, Calendar, Gauge, Trash2 } from 'lucide-react';
+import { Plus, Settings, MapPin, Fuel, Calendar, Gauge, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
 export function GeneratorSetup() {
-  const { generators, addGenerator, deactivateGenerator } = useGeneratorStore();
+  const { data: generators = [], isLoading } = useGenerators();
+  const addGenerator = useAddGenerator();
+  const deactivateGenerator = useDeactivateGenerator();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     location: '',
-    capacity: '',
-    fuelType: 'diesel' as FuelType,
-    startDate: format(new Date(), 'yyyy-MM-dd'),
-    initialHourReading: '',
-    initialFuelStock: '',
+    capacity_kva: '',
+    fuel_type: 'diesel' as FuelType,
+    start_date: format(new Date(), 'yyyy-MM-dd'),
+    initial_hour_reading: '',
+    initial_fuel_stock: '',
   });
 
-  const activeGenerators = generators.filter(g => g.isActive);
-  const inactiveGenerators = generators.filter(g => !g.isActive);
+  const activeGenerators = generators.filter(g => g.is_active);
+  const inactiveGenerators = generators.filter(g => !g.is_active);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.location || !formData.capacity) {
+    if (!formData.name || !formData.location || !formData.capacity_kva) {
       toast({
         title: 'Missing Information',
         description: 'Please fill in all required fields.',
@@ -64,40 +67,64 @@ export function GeneratorSetup() {
       return;
     }
 
-    addGenerator({
-      name: formData.name,
-      location: formData.location,
-      capacity: parseFloat(formData.capacity),
-      fuelType: formData.fuelType,
-      startDate: formData.startDate,
-      initialHourReading: parseFloat(formData.initialHourReading) || 0,
-      initialFuelStock: parseFloat(formData.initialFuelStock) || 0,
-    });
+    try {
+      await addGenerator.mutateAsync({
+        name: formData.name,
+        location: formData.location,
+        capacity_kva: parseFloat(formData.capacity_kva),
+        fuel_type: formData.fuel_type,
+        start_date: formData.start_date,
+        initial_hour_reading: parseFloat(formData.initial_hour_reading) || 0,
+        initial_fuel_stock: parseFloat(formData.initial_fuel_stock) || 0,
+      });
 
-    toast({
-      title: 'Generator Added',
-      description: `${formData.name} has been added successfully.`,
-    });
+      toast({
+        title: 'Generator Added',
+        description: `${formData.name} has been added successfully.`,
+      });
 
-    setFormData({
-      name: '',
-      location: '',
-      capacity: '',
-      fuelType: 'diesel',
-      startDate: format(new Date(), 'yyyy-MM-dd'),
-      initialHourReading: '',
-      initialFuelStock: '',
-    });
-    setIsDialogOpen(false);
+      setFormData({
+        name: '',
+        location: '',
+        capacity_kva: '',
+        fuel_type: 'diesel',
+        start_date: format(new Date(), 'yyyy-MM-dd'),
+        initial_hour_reading: '',
+        initial_fuel_stock: '',
+      });
+      setIsDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add generator',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleDeactivate = (gen: Generator) => {
-    deactivateGenerator(gen.id);
-    toast({
-      title: 'Generator Deactivated',
-      description: `${gen.name} has been deactivated. Historical data is preserved.`,
-    });
+  const handleDeactivate = async (gen: Generator) => {
+    try {
+      await deactivateGenerator.mutateAsync(gen.id);
+      toast({
+        title: 'Generator Deactivated',
+        description: `${gen.name} has been deactivated. Historical data is preserved.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to deactivate generator',
+        variant: 'destructive',
+      });
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -152,15 +179,15 @@ export function GeneratorSetup() {
                       id="capacity"
                       type="number"
                       placeholder="e.g., 500"
-                      value={formData.capacity}
-                      onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+                      value={formData.capacity_kva}
+                      onChange={(e) => setFormData({ ...formData, capacity_kva: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="fuelType">Fuel Type</Label>
                     <Select
-                      value={formData.fuelType}
-                      onValueChange={(value: FuelType) => setFormData({ ...formData, fuelType: value })}
+                      value={formData.fuel_type}
+                      onValueChange={(value: FuelType) => setFormData({ ...formData, fuel_type: value })}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -177,8 +204,8 @@ export function GeneratorSetup() {
                   <Input
                     id="startDate"
                     type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                    value={formData.start_date}
+                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -188,8 +215,8 @@ export function GeneratorSetup() {
                       id="initialHour"
                       type="number"
                       placeholder="e.g., 0"
-                      value={formData.initialHourReading}
-                      onChange={(e) => setFormData({ ...formData, initialHourReading: e.target.value })}
+                      value={formData.initial_hour_reading}
+                      onChange={(e) => setFormData({ ...formData, initial_hour_reading: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
@@ -198,8 +225,8 @@ export function GeneratorSetup() {
                       id="initialFuel"
                       type="number"
                       placeholder="e.g., 100"
-                      value={formData.initialFuelStock}
-                      onChange={(e) => setFormData({ ...formData, initialFuelStock: e.target.value })}
+                      value={formData.initial_fuel_stock}
+                      onChange={(e) => setFormData({ ...formData, initial_fuel_stock: e.target.value })}
                     />
                   </div>
                 </div>
@@ -208,8 +235,8 @@ export function GeneratorSetup() {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="secondary">
-                  Add Generator
+                <Button type="submit" variant="secondary" disabled={addGenerator.isPending}>
+                  {addGenerator.isPending ? 'Adding...' : 'Add Generator'}
                 </Button>
               </DialogFooter>
             </form>
@@ -280,23 +307,23 @@ export function GeneratorSetup() {
                   <div className="flex items-center gap-2 text-sm">
                     <Gauge className="w-4 h-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Capacity:</span>
-                    <span className="font-medium">{gen.capacity} kVA</span>
+                    <span className="font-medium">{gen.capacity_kva} kVA</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Fuel className="w-4 h-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Fuel:</span>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      gen.fuelType === 'diesel' 
+                      gen.fuel_type === 'diesel' 
                         ? 'bg-fuel-diesel/10 text-fuel-diesel' 
                         : 'bg-warning/10 text-warning'
                     }`}>
-                      {gen.fuelType.charAt(0).toUpperCase() + gen.fuelType.slice(1)}
+                      {gen.fuel_type.charAt(0).toUpperCase() + gen.fuel_type.slice(1)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Started:</span>
-                    <span className="font-medium">{format(new Date(gen.startDate), 'MMM dd, yyyy')}</span>
+                    <span className="font-medium">{format(new Date(gen.start_date), 'MMM dd, yyyy')}</span>
                   </div>
                 </div>
               </CardContent>

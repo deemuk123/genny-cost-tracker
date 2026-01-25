@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useGeneratorStore } from '@/store/generatorStore';
-import { Clock, Fuel, Zap, TrendingUp, AlertTriangle } from 'lucide-react';
+import { useGenerators, useHourReadings, useFuelStock, useFuelIssues } from '@/hooks/useGeneratorData';
+import { Clock, Fuel, Zap, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { 
   getCurrentNepaliDate, 
@@ -10,31 +10,42 @@ import {
 } from '@/lib/nepaliCalendar';
 
 export function Dashboard() {
-  const { generators, hourReadings, fuelStock, fuelIssues, getTotalHoursForPeriod } = useGeneratorStore();
+  const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
+  const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
   
-  const activeGenerators = generators.filter(g => g.isActive);
   const today = new Date();
   const monthStart = startOfMonth(today);
   const monthEnd = endOfMonth(today);
+  const todayStr = format(today, 'yyyy-MM-dd');
+  
+  const { data: hourReadings = [], isLoading: loadingReadings } = useHourReadings({
+    from: format(monthStart, 'yyyy-MM-dd'),
+    to: format(monthEnd, 'yyyy-MM-dd'),
+  });
+  
+  const { data: fuelIssues = [], isLoading: loadingIssues } = useFuelIssues();
+  
+  const activeGenerators = generators.filter(g => g.is_active);
   
   // Calculate this month's total hours
-  const thisMonthHours = activeGenerators.reduce((total, gen) => {
-    return total + getTotalHoursForPeriod(gen.id, monthStart, monthEnd);
+  const thisMonthHours = hourReadings.reduce((total, reading) => {
+    return total + (reading.hours_run || 0);
   }, 0);
 
   // Get today's readings
-  const todayStr = format(today, 'yyyy-MM-dd');
   const todayReadings = hourReadings.filter(r => r.date === todayStr);
 
   // Generators without today's reading
   const generatorsNeedingEntry = activeGenerators.filter(
-    gen => !todayReadings.find(r => r.generatorId === gen.id)
+    gen => !todayReadings.find(r => r.generator_id === gen.id)
   );
 
   // Recent fuel issues
-  const recentIssues = fuelIssues
+  const recentIssues = [...fuelIssues]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 5);
+
+  const isLoading = loadingGenerators || loadingStock || loadingReadings || loadingIssues;
 
   const stats = [
     {
@@ -66,6 +77,14 @@ export function Dashboard() {
       iconBg: 'bg-warning',
     },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -143,8 +162,9 @@ export function Dashboard() {
           </Card>
         ) : (
           activeGenerators.map((gen, index) => {
-            const monthHours = getTotalHoursForPeriod(gen.id, monthStart, monthEnd);
-            const todayReading = todayReadings.find(r => r.generatorId === gen.id);
+            const genReadings = hourReadings.filter(r => r.generator_id === gen.id);
+            const monthHours = genReadings.reduce((sum, r) => sum + (r.hours_run || 0), 0);
+            const todayReading = todayReadings.find(r => r.generator_id === gen.id);
             
             return (
               <Card 
@@ -159,11 +179,11 @@ export function Dashboard() {
                       <p className="text-sm text-muted-foreground">{gen.location}</p>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      gen.fuelType === 'diesel' 
+                      gen.fuel_type === 'diesel' 
                         ? 'bg-fuel-diesel/10 text-fuel-diesel' 
                         : 'bg-warning/10 text-warning'
                     }`}>
-                      {gen.fuelType.charAt(0).toUpperCase() + gen.fuelType.slice(1)}
+                      {gen.fuel_type.charAt(0).toUpperCase() + gen.fuel_type.slice(1)}
                     </span>
                   </div>
                 </CardHeader>
@@ -171,7 +191,7 @@ export function Dashboard() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Capacity</span>
-                      <span className="font-medium">{gen.capacity} kVA</span>
+                      <span className="font-medium">{gen.capacity_kva} kVA</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Hours this month</span>
@@ -181,7 +201,7 @@ export function Dashboard() {
                       <span className="text-sm text-muted-foreground">Today's entry</span>
                       {todayReading ? (
                         <span className="text-sm font-medium text-success">
-                          ✓ {todayReading.hoursRun.toFixed(1)} hrs
+                          ✓ {(todayReading.hours_run || 0).toFixed(1)} hrs
                         </span>
                       ) : (
                         <span className="text-sm font-medium text-warning">Pending</span>
@@ -207,7 +227,7 @@ export function Dashboard() {
           <CardContent>
             <div className="space-y-3">
               {recentIssues.map(issue => {
-                const gen = generators.find(g => g.id === issue.generatorId);
+                const gen = generators.find(g => g.id === issue.generator_id);
                 return (
                   <div 
                     key={issue.id}
@@ -215,7 +235,7 @@ export function Dashboard() {
                   >
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                        issue.fuelType === 'diesel' ? 'bg-fuel-diesel' : 'bg-warning'
+                        issue.fuel_type === 'diesel' ? 'bg-fuel-diesel' : 'bg-warning'
                       }`}>
                         <Fuel className="w-4 h-4 text-primary-foreground" />
                       </div>
@@ -226,7 +246,7 @@ export function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <span className="font-heading font-bold">{issue.quantity} L</span>
+                    <span className="font-heading font-bold">{issue.quantity_litres} L</span>
                   </div>
                 );
               })}

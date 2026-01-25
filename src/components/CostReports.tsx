@@ -10,25 +10,18 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { useGeneratorStore } from '@/store/generatorStore';
-import { GeneratorReport } from '@/types/generator';
-import { BarChart3, Clock, Fuel, IndianRupee, TrendingUp, Download } from 'lucide-react';
+import { useGenerators, useCostReport } from '@/hooks/useGeneratorData';
+import { BarChart3, Clock, Fuel, IndianRupee, TrendingUp, Download, Loader2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { 
   getCurrentNepaliDate, 
   getNepaliMonthName,
-  getFiscalYear,
   getFiscalYearMonths,
   getNepaliMonthRange 
 } from '@/lib/nepaliCalendar';
 
 export function CostReports() {
-  const { 
-    generators, 
-    getTotalHoursForPeriod, 
-    getTotalFuelIssuedForPeriod,
-    getAvgFuelCostPerLitre
-  } = useGeneratorStore();
+  const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
   
   const today = new Date();
   const nepaliDate = getCurrentNepaliDate();
@@ -38,6 +31,12 @@ export function CostReports() {
   const [periodType, setPeriodType] = useState<'custom' | 'nepali-month' | 'fy'>('custom');
   const [selectedNepaliMonth, setSelectedNepaliMonth] = useState(`${nepaliDate.year}-${nepaliDate.month}`);
   const [selectedFY, setSelectedFY] = useState(nepaliDate.month >= 4 ? nepaliDate.year : nepaliDate.year - 1);
+
+  const { data: costReportData, isLoading: loadingReport } = useCostReport({
+    from: fromDate,
+    to: toDate,
+    generatorId: filterGeneratorId !== 'all' ? filterGeneratorId : undefined,
+  });
 
   // Get available Nepali months for selection
   const nepaliMonthOptions = [];
@@ -71,47 +70,12 @@ export function CostReports() {
     setToDate(format(endRange.end, 'yyyy-MM-dd'));
   };
 
-  const activeGenerators = generators.filter(g => g.isActive);
+  const activeGenerators = generators.filter(g => g.is_active);
+  const reports = costReportData?.generators || [];
+  const grandTotals = costReportData?.totals || { totalHours: 0, totalFuelIssued: 0, totalCost: 0 };
+  const avgHourlyCost = grandTotals.totalHours > 0 ? grandTotals.totalCost / grandTotals.totalHours : 0;
 
-  // Calculate reports for each generator
-  const reports = useMemo((): GeneratorReport[] => {
-    const from = new Date(fromDate);
-    const to = new Date(toDate);
-    
-    return activeGenerators
-      .filter(gen => filterGeneratorId === 'all' || gen.id === filterGeneratorId)
-      .map(gen => {
-        const totalHours = getTotalHoursForPeriod(gen.id, from, to);
-        const totalFuelUsed = getTotalFuelIssuedForPeriod(gen.id, from, to);
-        const avgCostPerLitre = getAvgFuelCostPerLitre(gen.fuelType, to);
-        const totalFuelCost = totalFuelUsed * avgCostPerLitre;
-        const hourlyCost = totalHours > 0 ? totalFuelCost / totalHours : 0;
-        const avgConsumption = totalHours > 0 ? totalFuelUsed / totalHours : 0;
-
-        return {
-          generatorId: gen.id,
-          generatorName: gen.name,
-          totalHours,
-          totalFuelUsed,
-          avgConsumption,
-          totalFuelCost,
-          hourlyCost,
-        };
-      });
-  }, [fromDate, toDate, filterGeneratorId, activeGenerators, getTotalHoursForPeriod, getTotalFuelIssuedForPeriod, getAvgFuelCostPerLitre]);
-
-  // Grand totals
-  const grandTotals = useMemo(() => {
-    return reports.reduce((acc, r) => ({
-      totalHours: acc.totalHours + r.totalHours,
-      totalFuelUsed: acc.totalFuelUsed + r.totalFuelUsed,
-      totalFuelCost: acc.totalFuelCost + r.totalFuelCost,
-    }), { totalHours: 0, totalFuelUsed: 0, totalFuelCost: 0 });
-  }, [reports]);
-
-  const avgHourlyCost = grandTotals.totalHours > 0 
-    ? grandTotals.totalFuelCost / grandTotals.totalHours 
-    : 0;
+  const isLoading = loadingGenerators || loadingReport;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -250,187 +214,192 @@ export function CostReports() {
         </CardContent>
       </Card>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="stat-glow">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Hours</p>
-                <p className="text-3xl font-heading font-bold">{grandTotals.totalHours.toFixed(1)}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-                <Clock className="w-6 h-6 text-secondary-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Fuel Consumed</p>
-                <p className="text-3xl font-heading font-bold">{grandTotals.totalFuelUsed.toFixed(1)} L</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-fuel-diesel flex items-center justify-center">
-                <Fuel className="w-6 h-6 text-primary-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Fuel Cost</p>
-                <p className="text-3xl font-heading font-bold">
-                  ₹{grandTotals.totalFuelCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-                <IndianRupee className="w-6 h-6 text-primary-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-secondary/50 bg-secondary/5">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Hourly Cost</p>
-                <p className="text-3xl font-heading font-bold text-secondary">
-                  ₹{avgHourlyCost.toFixed(2)}
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-secondary-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Detailed Reports */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="w-5 h-5" />
-            Generator-wise Report
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {reports.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              No data available for the selected period.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Generator</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">Hours Run</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">Fuel Used</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">L/Hour</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">Fuel Cost</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">₹/Hour</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reports.map((report) => {
-                    const gen = generators.find(g => g.id === report.generatorId);
-                    return (
-                      <tr key={report.generatorId} className="border-b last:border-0 hover:bg-muted/50">
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{report.generatorName}</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${
-                              gen?.fuelType === 'diesel' 
-                                ? 'bg-fuel-diesel/10 text-fuel-diesel' 
-                                : 'bg-warning/10 text-warning'
-                            }`}>
-                              {gen?.fuelType}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-right font-heading font-bold">
-                          {report.totalHours.toFixed(1)} hrs
-                        </td>
-                        <td className="py-4 px-4 text-right font-heading">
-                          {report.totalFuelUsed.toFixed(1)} L
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          {report.avgConsumption.toFixed(2)}
-                        </td>
-                        <td className="py-4 px-4 text-right font-heading">
-                          ₹{report.totalFuelCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <span className="font-heading font-bold text-secondary">
-                            ₹{report.hourlyCost.toFixed(2)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-muted/50">
-                    <td className="py-4 px-4 font-bold">Total</td>
-                    <td className="py-4 px-4 text-right font-heading font-bold">
-                      {grandTotals.totalHours.toFixed(1)} hrs
-                    </td>
-                    <td className="py-4 px-4 text-right font-heading font-bold">
-                      {grandTotals.totalFuelUsed.toFixed(1)} L
-                    </td>
-                    <td className="py-4 px-4 text-right font-heading">
-                      {grandTotals.totalHours > 0 
-                        ? (grandTotals.totalFuelUsed / grandTotals.totalHours).toFixed(2)
-                        : '-'}
-                    </td>
-                    <td className="py-4 px-4 text-right font-heading font-bold">
-                      ₹{grandTotals.totalFuelCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="font-heading font-bold text-secondary">
-                        ₹{avgHourlyCost.toFixed(2)}
-                      </span>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Insight Cards */}
-      {reports.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {reports.map((report) => (
-            <Card key={report.generatorId} className="animate-slide-up">
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <>
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="stat-glow">
               <CardContent className="p-6">
-                <h3 className="font-heading font-bold text-lg mb-4">{report.generatorName}</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-2 rounded bg-muted/50">
-                    <span className="text-sm text-muted-foreground">Hours this period</span>
-                    <span className="font-heading font-bold">{report.totalHours.toFixed(1)} hrs</span>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Hours</p>
+                    <p className="text-3xl font-heading font-bold">{grandTotals.totalHours.toFixed(1)}</p>
                   </div>
-                  <div className="flex justify-between items-center p-2 rounded bg-muted/50">
-                    <span className="text-sm text-muted-foreground">Fuel efficiency</span>
-                    <span className="font-heading font-bold">{report.avgConsumption.toFixed(2)} L/hr</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 rounded bg-secondary/10 border border-secondary/20">
-                    <span className="text-sm font-medium">Hourly Cost</span>
-                    <span className="font-heading font-bold text-xl text-secondary">
-                      ₹{report.hourlyCost.toFixed(2)}
-                    </span>
+                  <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-secondary-foreground" />
                   </div>
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Fuel Consumed</p>
+                    <p className="text-3xl font-heading font-bold">{grandTotals.totalFuelIssued.toFixed(1)} L</p>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-fuel-diesel flex items-center justify-center">
+                    <Fuel className="w-6 h-6 text-primary-foreground" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Fuel Cost</p>
+                    <p className="text-3xl font-heading font-bold">
+                      ₹{grandTotals.totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
+                    <IndianRupee className="w-6 h-6 text-primary-foreground" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-secondary/50 bg-secondary/5">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Avg Hourly Cost</p>
+                    <p className="text-3xl font-heading font-bold text-secondary">
+                      ₹{avgHourlyCost.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-secondary-foreground" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Detailed Reports */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5" />
+                Generator-wise Report
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {reports.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  No data available for the selected period.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground">Generator</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Hours Run</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Fuel Used</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">L/Hour</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">Fuel Cost</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground">₹/Hour</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reports.map((report) => (
+                        <tr key={report.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{report.name}</span>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                report.fuelType === 'diesel' 
+                                  ? 'bg-fuel-diesel/10 text-fuel-diesel' 
+                                  : 'bg-warning/10 text-warning'
+                              }`}>
+                                {report.fuelType}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-right font-heading font-bold">
+                            {report.totalHours.toFixed(1)} hrs
+                          </td>
+                          <td className="py-4 px-4 text-right font-heading">
+                            {report.totalFuelIssued.toFixed(1)} L
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            {report.avgConsumption.toFixed(2)}
+                          </td>
+                          <td className="py-4 px-4 text-right font-heading">
+                            ₹{report.totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="font-heading font-bold text-secondary">
+                              ₹{report.hourlyCost.toFixed(2)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-muted/50">
+                        <td className="py-4 px-4 font-bold">Total</td>
+                        <td className="py-4 px-4 text-right font-heading font-bold">
+                          {grandTotals.totalHours.toFixed(1)} hrs
+                        </td>
+                        <td className="py-4 px-4 text-right font-heading font-bold">
+                          {grandTotals.totalFuelIssued.toFixed(1)} L
+                        </td>
+                        <td className="py-4 px-4 text-right font-heading">
+                          {grandTotals.totalHours > 0 
+                            ? (grandTotals.totalFuelIssued / grandTotals.totalHours).toFixed(2)
+                            : '-'}
+                        </td>
+                        <td className="py-4 px-4 text-right font-heading font-bold">
+                          ₹{grandTotals.totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <span className="font-heading font-bold text-secondary">
+                            ₹{avgHourlyCost.toFixed(2)}
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Insight Cards */}
+          {reports.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {reports.map((report) => (
+                <Card key={report.id} className="animate-slide-up">
+                  <CardContent className="p-6">
+                    <h3 className="font-heading font-bold text-lg mb-4">{report.name}</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-2 rounded bg-muted/50">
+                        <span className="text-sm text-muted-foreground">Hours this period</span>
+                        <span className="font-heading font-bold">{report.totalHours.toFixed(1)} hrs</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded bg-muted/50">
+                        <span className="text-sm text-muted-foreground">Fuel efficiency</span>
+                        <span className="font-heading font-bold">{report.avgConsumption.toFixed(2)} L/hr</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 rounded bg-secondary/10 border border-secondary/20">
+                        <span className="text-sm font-medium">Cost per hour</span>
+                        <span className="font-heading font-bold text-xl text-secondary">
+                          ₹{report.hourlyCost.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

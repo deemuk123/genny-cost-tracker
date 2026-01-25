@@ -10,31 +10,35 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { useGeneratorStore } from '@/store/generatorStore';
+import { useFuelPurchases, useFuelStock, useAddFuelPurchase } from '@/hooks/useGeneratorData';
 import { FuelType } from '@/types/generator';
-import { Fuel, Plus, ShoppingCart } from 'lucide-react';
+import { Fuel, Plus, ShoppingCart, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
 export function FuelPurchase() {
-  const { fuelPurchases, fuelStock, addFuelPurchase } = useGeneratorStore();
+  const { data: fuelPurchases = [], isLoading: loadingPurchases } = useFuelPurchases();
+  const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
+  const addFuelPurchase = useAddFuelPurchase();
+  
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
-    fuelType: 'diesel' as FuelType,
-    quantity: '',
-    ratePerLitre: '',
+    fuel_type: 'diesel' as FuelType,
+    quantity_litres: '',
+    rate_per_litre: '',
     vendor: '',
+    invoice_number: '',
   });
 
   const recentPurchases = [...fuelPurchases]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 10);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const quantity = parseFloat(formData.quantity);
-    const rate = parseFloat(formData.ratePerLitre);
+    const quantity = parseFloat(formData.quantity_litres);
+    const rate = parseFloat(formData.rate_per_litre);
 
     if (isNaN(quantity) || quantity <= 0) {
       toast({
@@ -54,32 +58,52 @@ export function FuelPurchase() {
       return;
     }
 
-    addFuelPurchase({
-      date: formData.date,
-      fuelType: formData.fuelType,
-      quantity,
-      ratePerLitre: rate,
-      vendor: formData.vendor || undefined,
-    });
+    try {
+      await addFuelPurchase.mutateAsync({
+        date: formData.date,
+        fuel_type: formData.fuel_type,
+        quantity_litres: quantity,
+        rate_per_litre: rate,
+        vendor: formData.vendor || null,
+        invoice_number: formData.invoice_number || null,
+      });
 
-    toast({
-      title: 'Purchase Recorded',
-      description: `Added ${quantity} L of ${formData.fuelType} at ₹${rate}/L`,
-    });
+      toast({
+        title: 'Purchase Recorded',
+        description: `Added ${quantity} L of ${formData.fuel_type} at ₹${rate}/L`,
+      });
 
-    setFormData(prev => ({
-      ...prev,
-      quantity: '',
-      ratePerLitre: '',
-      vendor: '',
-    }));
+      setFormData(prev => ({
+        ...prev,
+        quantity_litres: '',
+        rate_per_litre: '',
+        vendor: '',
+        invoice_number: '',
+      }));
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to record purchase',
+        variant: 'destructive',
+      });
+    }
   };
 
   const totalAmount = () => {
-    const qty = parseFloat(formData.quantity) || 0;
-    const rate = parseFloat(formData.ratePerLitre) || 0;
+    const qty = parseFloat(formData.quantity_litres) || 0;
+    const rate = parseFloat(formData.rate_per_litre) || 0;
     return qty * rate;
   };
+
+  const isLoading = loadingPurchases || loadingStock;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -144,8 +168,8 @@ export function FuelPurchase() {
                 <div className="space-y-2">
                   <Label>Fuel Type</Label>
                   <Select
-                    value={formData.fuelType}
-                    onValueChange={(value: FuelType) => setFormData({ ...formData, fuelType: value })}
+                    value={formData.fuel_type}
+                    onValueChange={(value: FuelType) => setFormData({ ...formData, fuel_type: value })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -165,8 +189,8 @@ export function FuelPurchase() {
                     type="number"
                     step="0.1"
                     placeholder="e.g., 500"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                    value={formData.quantity_litres}
+                    onChange={(e) => setFormData({ ...formData, quantity_litres: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -175,19 +199,29 @@ export function FuelPurchase() {
                     type="number"
                     step="0.01"
                     placeholder="e.g., 89.50"
-                    value={formData.ratePerLitre}
-                    onChange={(e) => setFormData({ ...formData, ratePerLitre: e.target.value })}
+                    value={formData.rate_per_litre}
+                    onChange={(e) => setFormData({ ...formData, rate_per_litre: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Vendor (Optional)</Label>
-                <Input
-                  placeholder="e.g., Indian Oil"
-                  value={formData.vendor}
-                  onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Vendor (Optional)</Label>
+                  <Input
+                    placeholder="e.g., Indian Oil"
+                    value={formData.vendor}
+                    onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Invoice # (Optional)</Label>
+                  <Input
+                    placeholder="e.g., INV-001"
+                    value={formData.invoice_number}
+                    onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
+                  />
+                </div>
               </div>
 
               {totalAmount() > 0 && (
@@ -201,9 +235,9 @@ export function FuelPurchase() {
                 </div>
               )}
 
-              <Button type="submit" variant="secondary" className="w-full" size="lg">
+              <Button type="submit" variant="secondary" className="w-full" size="lg" disabled={addFuelPurchase.isPending}>
                 <Plus className="w-5 h-5" />
-                Record Purchase
+                {addFuelPurchase.isPending ? 'Recording...' : 'Record Purchase'}
               </Button>
             </form>
           </CardContent>
@@ -228,12 +262,12 @@ export function FuelPurchase() {
                   >
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        purchase.fuelType === 'diesel' ? 'bg-fuel-diesel' : 'bg-warning'
+                        purchase.fuel_type === 'diesel' ? 'bg-fuel-diesel' : 'bg-warning'
                       }`}>
                         <Fuel className="w-5 h-5 text-primary-foreground" />
                       </div>
                       <div>
-                        <p className="font-medium capitalize">{purchase.fuelType}</p>
+                        <p className="font-medium capitalize">{purchase.fuel_type}</p>
                         <p className="text-sm text-muted-foreground">
                           {format(new Date(purchase.date), 'MMM dd, yyyy')}
                           {purchase.vendor && ` • ${purchase.vendor}`}
@@ -241,9 +275,9 @@ export function FuelPurchase() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-heading font-bold">{purchase.quantity} L</p>
+                      <p className="font-heading font-bold">{purchase.quantity_litres} L</p>
                       <p className="text-sm text-muted-foreground">
-                        ₹{purchase.totalAmount.toLocaleString('en-IN')}
+                        ₹{(purchase.total_amount || 0).toLocaleString('en-IN')}
                       </p>
                     </div>
                   </div>
