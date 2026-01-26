@@ -126,7 +126,7 @@ export const fuelPurchaseApi = {
     if (params?.to) {
       query = query.lte('date', params.to);
     }
-    if (params?.fuelType) {
+    if (params?.fuelType && (params.fuelType === 'diesel' || params.fuelType === 'petrol')) {
       query = query.eq('fuel_type', params.fuelType);
     }
     

@@ -11,14 +11,15 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { useFuelPurchases, useFuelStock, useAddFuelPurchase } from '@/hooks/useGeneratorData';
-import { FuelType } from '@/types/generator';
+import { FuelType, FuelStockLevels } from '@/types/generator';
 import { Fuel, Plus, ShoppingCart, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
 export function FuelPurchase() {
+  const defaultStock: FuelStockLevels = { diesel: 0, petrol: 0 };
   const { data: fuelPurchases = [], isLoading: loadingPurchases } = useFuelPurchases();
-  const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
+  const { data: fuelStock = defaultStock, isLoading: loadingStock } = useFuelStock();
   const addFuelPurchase = useAddFuelPurchase();
   
   const [formData, setFormData] = useState({
