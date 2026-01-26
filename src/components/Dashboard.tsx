@@ -11,7 +11,8 @@ import {
 
 export function Dashboard() {
   const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
-  const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
+  const defaultStock = { diesel: 0, petrol: 0 };
+  const { data: fuelStock = defaultStock, isLoading: loadingStock } = useFuelStock();
   
   const today = new Date();
   const monthStart = startOfMonth(today);

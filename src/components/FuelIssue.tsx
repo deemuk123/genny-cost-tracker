@@ -11,14 +11,16 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { useGenerators, useFuelIssues, useFuelStock, useAddFuelIssue } from '@/hooks/useGeneratorData';
+import { FuelStockLevels } from '@/types/generator';
 import { Droplets, AlertTriangle, ArrowRight, Fuel, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
 export function FuelIssue() {
+  const defaultStock: FuelStockLevels = { diesel: 0, petrol: 0 };
   const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
   const { data: fuelIssues = [], isLoading: loadingIssues } = useFuelIssues();
-  const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
+  const { data: fuelStock = defaultStock, isLoading: loadingStock } = useFuelStock();
   const addFuelIssue = useAddFuelIssue();
   
   const [formData, setFormData] = useState({

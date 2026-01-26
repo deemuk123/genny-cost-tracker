@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { generatorApi, hourReadingApi, fuelPurchaseApi, fuelIssueApi, stockCheckApi, reportsApi } from '@/services/api';
-import { Generator, HourMeterReading, FuelPurchase, FuelIssue, MonthlyStockCheck } from '@/types/generator';
+import { generatorApi, hourReadingApi, fuelPurchaseApi, fuelIssueApi, stockCheckApi, reportsApi, fuelStockApi, apiKeyApi } from '@/services/api';
+import { Generator, HourMeterReading, FuelPurchase, FuelIssue, MonthlyStockCheck, FuelStockLevels, ApiKey } from '@/types/generator';
 import { useToast } from '@/hooks/use-toast';
 
 // Generators Hooks
@@ -117,9 +117,9 @@ export function useAddFuelPurchase() {
 }
 
 export function useFuelStock() {
-  return useQuery({
+  return useQuery<FuelStockLevels>({
     queryKey: ['fuelStock'],
-    queryFn: fuelPurchaseApi.getStock,
+    queryFn: fuelStockApi.getStock,
   });
 }
 
@@ -178,5 +178,45 @@ export function useCostReport(params: { from: string; to: string; generatorId?: 
     queryKey: ['costReport', params],
     queryFn: () => reportsApi.getCostReport(params),
     enabled: !!params.from && !!params.to,
+  });
+}
+
+// API Keys Hooks
+export function useApiKeys() {
+  return useQuery<ApiKey[]>({
+    queryKey: ['apiKeys'],
+    queryFn: apiKeyApi.getAll,
+  });
+}
+
+export function useCreateApiKey() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: apiKeyApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
+      toast({ title: 'API key created successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to create API key', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useRevokeApiKey() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: apiKeyApi.revoke,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
+      toast({ title: 'API key revoked' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to revoke API key', description: error.message, variant: 'destructive' });
+    },
   });
 }
