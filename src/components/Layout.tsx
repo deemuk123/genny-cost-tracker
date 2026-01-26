@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { 
   LayoutDashboard, 
   Settings, 
@@ -10,10 +10,21 @@ import {
   ChevronRight,
   Zap,
   Users,
-  Key
+  Key,
+  LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { canAccess } from '@/lib/permissions';
 import { RoleIndicator } from '@/components/RoleIndicator';
@@ -41,7 +52,8 @@ const navItems: { id: FeatureId; label: string; icon: typeof LayoutDashboard }[]
 ];
 
 export function Layout({ children, activeTab, onTabChange, sidebarCollapsed, onSidebarToggle }: LayoutProps) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   
   // Filter nav items based on user role
   const filteredNavItems = navItems.filter(item => 
@@ -99,7 +111,19 @@ export function Layout({ children, activeTab, onTabChange, sidebarCollapsed, onS
         </nav>
 
         {/* Collapse Toggle */}
-        <div className="p-3 border-t border-sidebar-border">
+        <div className="p-3 border-t border-sidebar-border space-y-2">
+          {/* Logout Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowLogoutDialog(true)}
+            className="w-full text-sidebar-foreground/70 hover:text-destructive hover:bg-destructive/10"
+          >
+            <LogOut className="w-5 h-5" />
+            {!sidebarCollapsed && <span className="ml-2">Logout</span>}
+          </Button>
+          
+          {/* Collapse Toggle */}
           <Button
             variant="ghost"
             size="sm"
@@ -117,6 +141,30 @@ export function Layout({ children, activeTab, onTabChange, sidebarCollapsed, onS
           </Button>
         </div>
       </aside>
+
+      {/* Logout Confirmation Dialog */}
+      <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out? You will need to sign in again to access the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                logout();
+                setShowLogoutDialog(false);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Logout
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Main Content */}
       <main
