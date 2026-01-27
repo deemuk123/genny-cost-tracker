@@ -31,10 +31,11 @@ export function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState<CreateUserRequest>({
+  const [formData, setFormData] = useState<CreateUserRequest & { password: string }>({
     email: '',
     name: '',
     role: 'viewer',
+    password: '',
   });
 
   // Fetch users
@@ -85,7 +86,7 @@ export function UserManagement() {
   });
 
   const resetForm = () => {
-    setFormData({ email: '', name: '', role: 'viewer' });
+    setFormData({ email: '', name: '', role: 'viewer', password: '' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -99,7 +100,7 @@ export function UserManagement() {
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
-    setFormData({ email: user.email, name: user.name, role: user.role });
+    setFormData({ email: user.email, name: user.name, role: user.role, password: '' });
   };
 
   const filteredUsers = users.filter(
@@ -164,6 +165,18 @@ export function UserManagement() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Enter password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    required
+                    minLength={6}
                   />
                 </div>
                 <div className="space-y-2">
