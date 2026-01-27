@@ -3,17 +3,22 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useGenerators, useHourReadings, useAddHourReading, useLastHourReading } from '@/hooks/useGeneratorData';
+import { useGenerators, useHourReadings, useAddHourReading } from '@/hooks/useGeneratorData';
 import { hourReadingApi } from '@/services/api';
 import { Clock, AlertCircle, Check, ArrowRight, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { useQuery } from '@tanstack/react-query';
+import { decimalToHoursMinutes, hoursMinutesToDecimal, formatDecimalAsHoursMinutes } from '@/lib/hourMeterUtils';
+
+interface HoursMinutesInput {
+  hours: string;
+  minutes: string;
+}
 
 export function HourMeterEntry() {
   const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [entries, setEntries] = useState<Record<string, string>>({});
+  const [entries, setEntries] = useState<Record<string, HoursMinutesInput>>({});
   const [openingHours, setOpeningHours] = useState<Record<string, number>>({});
   
   const { data: hourReadings = [], isLoading: loadingReadings } = useHourReadings();
@@ -49,14 +54,27 @@ export function HourMeterEntry() {
     return hourReadings.some(r => r.generator_id === generatorId && r.date === date);
   };
 
+  const getClosingDecimal = (generatorId: string): number | null => {
+    const entry = entries[generatorId];
+    if (!entry?.hours) return null;
+    
+    const hours = parseInt(entry.hours, 10);
+    const minutes = parseInt(entry.minutes || '0', 10);
+    
+    if (isNaN(hours)) return null;
+    if (isNaN(minutes) || minutes < 0 || minutes >= 60) return null;
+    
+    return hoursMinutesToDecimal(hours, minutes);
+  };
+
   const handleSubmit = async (generatorId: string) => {
-    const closingHour = parseFloat(entries[generatorId]);
+    const closingHour = getClosingDecimal(generatorId);
     const openingHour = getOpeningHour(generatorId);
     
-    if (isNaN(closingHour)) {
+    if (closingHour === null) {
       toast({
         title: 'Invalid Input',
-        description: 'Please enter a valid closing hour reading.',
+        description: 'Please enter valid closing hour reading.',
         variant: 'destructive',
       });
       return;
@@ -93,10 +111,10 @@ export function HourMeterEntry() {
       
       toast({
         title: 'Entry Saved',
-        description: `${gen?.name} ran for ${hoursRun.toFixed(1)} hours.`,
+        description: `${gen?.name} ran for ${formatDecimalAsHoursMinutes(hoursRun)} hours.`,
       });
 
-      setEntries(prev => ({ ...prev, [generatorId]: '' }));
+      setEntries(prev => ({ ...prev, [generatorId]: { hours: '', minutes: '' } }));
       // Update opening hours for next entry
       setOpeningHours(prev => ({ ...prev, [generatorId]: closingHour }));
     } catch (error: any) {
@@ -112,23 +130,21 @@ export function HourMeterEntry() {
     let successCount = 0;
     
     for (const gen of activeGenerators) {
-      if (entries[gen.id] && !hasEntryForDate(gen.id, selectedDate)) {
-        const closingHour = parseFloat(entries[gen.id]);
-        const openingHour = getOpeningHour(gen.id);
-        
-        if (!isNaN(closingHour) && closingHour >= openingHour) {
-          try {
-            await addHourReading.mutateAsync({
-              generator_id: gen.id,
-              date: selectedDate,
-              opening_hour: openingHour,
-              closing_hour: closingHour,
-            });
-            successCount++;
-            setOpeningHours(prev => ({ ...prev, [gen.id]: closingHour }));
-          } catch (error) {
-            console.error(`Failed to save entry for ${gen.name}:`, error);
-          }
+      const closingHour = getClosingDecimal(gen.id);
+      const openingHour = getOpeningHour(gen.id);
+      
+      if (closingHour !== null && !hasEntryForDate(gen.id, selectedDate) && closingHour >= openingHour) {
+        try {
+          await addHourReading.mutateAsync({
+            generator_id: gen.id,
+            date: selectedDate,
+            opening_hour: openingHour,
+            closing_hour: closingHour,
+          });
+          successCount++;
+          setOpeningHours(prev => ({ ...prev, [gen.id]: closingHour }));
+        } catch (error) {
+          console.error(`Failed to save entry for ${gen.name}:`, error);
         }
       }
     }
@@ -148,6 +164,16 @@ export function HourMeterEntry() {
     }
   };
 
+  const updateEntry = (generatorId: string, field: 'hours' | 'minutes', value: string) => {
+    setEntries(prev => ({
+      ...prev,
+      [generatorId]: {
+        ...prev[generatorId],
+        [field]: value,
+      },
+    }));
+  };
+
   const isLoading = loadingGenerators || loadingReadings;
 
   if (isLoading) {
@@ -164,7 +190,7 @@ export function HourMeterEntry() {
       <div>
         <h1 className="text-3xl font-heading font-bold text-foreground">Daily Hour Meter Entry</h1>
         <p className="text-muted-foreground mt-1">
-          Enter closing hour readings for each generator. Opening hours are auto-filled.
+          Enter closing hour readings in HHHH:MM format. Opening hours are auto-filled.
         </p>
       </div>
 
@@ -210,10 +236,15 @@ export function HourMeterEntry() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {activeGenerators.map((gen, index) => {
             const openingHour = getOpeningHour(gen.id);
+            const openingFormatted = decimalToHoursMinutes(openingHour);
             const hasEntry = hasEntryForDate(gen.id, selectedDate);
             const existingEntry = hourReadings.find(
               r => r.generator_id === gen.id && r.date === selectedDate
             );
+
+            const closingDecimal = getClosingDecimal(gen.id);
+            const isValid = closingDecimal !== null && closingDecimal >= openingHour;
+            const isInvalid = closingDecimal !== null && closingDecimal < openingHour;
 
             return (
               <Card 
@@ -248,13 +279,13 @@ export function HourMeterEntry() {
                         <span className="text-sm text-muted-foreground">Closing</span>
                       </div>
                       <div className="flex items-center justify-between font-heading font-bold text-lg">
-                        <span>{existingEntry?.opening_hour.toFixed(1)}</span>
-                        <span className="text-success">{existingEntry?.closing_hour.toFixed(1)}</span>
+                        <span>{formatDecimalAsHoursMinutes(existingEntry?.opening_hour || 0)}</span>
+                        <span className="text-success">{formatDecimalAsHoursMinutes(existingEntry?.closing_hour || 0)}</span>
                       </div>
                       <div className="text-center mt-3 pt-3 border-t border-success/20">
                         <span className="text-sm text-muted-foreground">Hours Run</span>
                         <p className="font-heading font-bold text-2xl text-success">
-                          {(existingEntry?.hours_run || 0).toFixed(1)} hrs
+                          {formatDecimalAsHoursMinutes(existingEntry?.hours_run || 0)}
                         </p>
                       </div>
                     </div>
@@ -262,38 +293,47 @@ export function HourMeterEntry() {
                     <div className="space-y-4">
                       <div className="flex items-center gap-4">
                         <div className="flex-1">
-                          <Label className="text-xs text-muted-foreground">Opening Hour</Label>
+                          <Label className="text-xs text-muted-foreground">Opening Hour (HHHH:MM)</Label>
                           <div className="mt-1 p-3 rounded-lg bg-muted/50 font-heading font-bold text-lg">
-                            {openingHour.toFixed(1)}
+                            {openingFormatted.hours}:{openingFormatted.minutes.toString().padStart(2, '0')}
                           </div>
                         </div>
                         <ArrowRight className="w-5 h-5 text-muted-foreground mt-6" />
                         <div className="flex-1">
-                          <Label className="text-xs text-muted-foreground">Closing Hour *</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            placeholder="Enter closing"
-                            value={entries[gen.id] || ''}
-                            onChange={(e) => setEntries(prev => ({
-                              ...prev,
-                              [gen.id]: e.target.value
-                            }))}
-                            className="mt-1 font-heading font-bold text-lg"
-                          />
+                          <Label className="text-xs text-muted-foreground">Closing Hour (HHHH:MM) *</Label>
+                          <div className="mt-1 flex gap-1">
+                            <Input
+                              type="number"
+                              placeholder="HHHH"
+                              value={entries[gen.id]?.hours || ''}
+                              onChange={(e) => updateEntry(gen.id, 'hours', e.target.value)}
+                              className="font-heading font-bold text-lg w-20"
+                              min={0}
+                            />
+                            <span className="self-center font-bold text-lg">:</span>
+                            <Input
+                              type="number"
+                              placeholder="MM"
+                              value={entries[gen.id]?.minutes || ''}
+                              onChange={(e) => updateEntry(gen.id, 'minutes', e.target.value)}
+                              className="font-heading font-bold text-lg w-16"
+                              min={0}
+                              max={59}
+                            />
+                          </div>
                         </div>
                       </div>
                       
-                      {entries[gen.id] && parseFloat(entries[gen.id]) >= openingHour && (
+                      {isValid && closingDecimal !== null && (
                         <div className="text-center p-3 rounded-lg bg-secondary/10 border border-secondary/20">
                           <span className="text-sm text-muted-foreground">Hours Run</span>
                           <p className="font-heading font-bold text-2xl text-secondary">
-                            {(parseFloat(entries[gen.id]) - openingHour).toFixed(1)} hrs
+                            {formatDecimalAsHoursMinutes(closingDecimal - openingHour)}
                           </p>
                         </div>
                       )}
 
-                      {entries[gen.id] && parseFloat(entries[gen.id]) < openingHour && (
+                      {isInvalid && (
                         <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
                           <AlertCircle className="w-4 h-4" />
                           Closing must be ≥ opening hour
@@ -304,7 +344,7 @@ export function HourMeterEntry() {
                         variant="secondary" 
                         className="w-full"
                         onClick={() => handleSubmit(gen.id)}
-                        disabled={!entries[gen.id] || parseFloat(entries[gen.id]) < openingHour || addHourReading.isPending}
+                        disabled={!isValid || addHourReading.isPending}
                       >
                         Save Entry
                       </Button>
