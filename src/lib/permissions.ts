@@ -1,13 +1,13 @@
 import { UserRole } from '@/hooks/useAuth';
 
-type Feature = 'dashboard' | 'generators' | 'hours' | 'purchase' | 'issue' | 'stock' | 'reports' | 'users' | 'api-keys';
+type Feature = 'dashboard' | 'generators' | 'hours' | 'daily-report' | 'purchase' | 'issue' | 'stock' | 'reports' | 'users' | 'api-keys';
 
 const rolePermissions: Record<UserRole, Feature[]> = {
-  super_admin: ['dashboard', 'generators', 'hours', 'purchase', 'issue', 'stock', 'reports', 'users', 'api-keys'],
-  admin: ['dashboard', 'generators', 'hours', 'purchase', 'issue', 'stock', 'reports'],
-  maintenance: ['dashboard', 'hours', 'issue', 'stock', 'reports'],
-  operator: ['dashboard', 'hours', 'issue'],
-  viewer: ['dashboard', 'reports'],
+  super_admin: ['dashboard', 'generators', 'hours', 'daily-report', 'purchase', 'issue', 'stock', 'reports', 'users', 'api-keys'],
+  admin: ['dashboard', 'generators', 'hours', 'daily-report', 'purchase', 'issue', 'stock', 'reports'],
+  maintenance: ['dashboard', 'hours', 'daily-report', 'issue', 'stock', 'reports'],
+  operator: ['dashboard', 'hours', 'daily-report', 'issue'],
+  viewer: ['dashboard', 'daily-report', 'reports'],
 };
 
 export function canAccess(role: UserRole, feature: Feature): boolean {

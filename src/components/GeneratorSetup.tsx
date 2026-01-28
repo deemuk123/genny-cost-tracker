@@ -134,6 +134,9 @@ export function GeneratorSetup() {
           location: formData.location,
           capacity_kva: parseFloat(formData.capacity_kva),
           fuel_type: formData.fuel_type,
+          start_date: formData.start_date,
+          initial_hour_reading: parseFloat(formData.initial_hour_reading) || 0,
+          initial_fuel_stock: parseFloat(formData.initial_fuel_stock) || 0,
         },
       });
 
@@ -240,41 +243,39 @@ export function GeneratorSetup() {
             </Select>
           </div>
         </div>
-        {!isEdit && (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Start Date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="initialHour">Initial Hour Reading</Label>
-                <Input
-                  id="initialHour"
-                  type="number"
-                  placeholder="e.g., 0"
-                  value={formData.initial_hour_reading}
-                  onChange={(e) => setFormData({ ...formData, initial_hour_reading: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="initialFuel">Initial Fuel Stock (L)</Label>
-                <Input
-                  id="initialFuel"
-                  type="number"
-                  placeholder="e.g., 100"
-                  value={formData.initial_fuel_stock}
-                  onChange={(e) => setFormData({ ...formData, initial_fuel_stock: e.target.value })}
-                />
-              </div>
-            </div>
-          </>
-        )}
+        <div className="space-y-2">
+          <Label htmlFor="startDate">Start Date</Label>
+          <Input
+            id="startDate"
+            type="date"
+            value={formData.start_date}
+            onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="initialHour">Initial Hour Reading</Label>
+            <Input
+              id="initialHour"
+              type="number"
+              step="0.01"
+              placeholder="e.g., 0"
+              value={formData.initial_hour_reading}
+              onChange={(e) => setFormData({ ...formData, initial_hour_reading: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="initialFuel">Initial Fuel Stock (L)</Label>
+            <Input
+              id="initialFuel"
+              type="number"
+              step="0.01"
+              placeholder="e.g., 100"
+              value={formData.initial_fuel_stock}
+              onChange={(e) => setFormData({ ...formData, initial_fuel_stock: e.target.value })}
+            />
+          </div>
+        </div>
       </div>
       <DialogFooter>
         <Button 
@@ -336,7 +337,7 @@ export function GeneratorSetup() {
           <DialogHeader>
             <DialogTitle className="font-heading">Edit Generator</DialogTitle>
             <DialogDescription>
-              Update the generator details. Start date and initial readings cannot be changed.
+              Update all generator details including start date and initial readings.
             </DialogDescription>
           </DialogHeader>
           <GeneratorForm isEdit onSubmit={handleEditSubmit} />

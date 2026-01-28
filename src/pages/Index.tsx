@@ -3,6 +3,7 @@ import { Layout } from '@/components/Layout';
 import { Dashboard } from '@/components/Dashboard';
 import { GeneratorSetup } from '@/components/GeneratorSetup';
 import { HourMeterEntry } from '@/components/HourMeterEntry';
+import { DailyHourReport } from '@/components/DailyHourReport';
 import { FuelPurchase } from '@/components/FuelPurchase';
 import { FuelIssue } from '@/components/FuelIssue';
 import { MonthlyStock } from '@/components/MonthlyStock';
@@ -22,6 +23,8 @@ const Index = () => {
         return <GeneratorSetup />;
       case 'hours':
         return <HourMeterEntry />;
+      case 'daily-report':
+        return <DailyHourReport />;
       case 'purchase':
         return <FuelPurchase />;
       case 'issue':
