@@ -37,12 +37,13 @@ interface LayoutProps {
   onSidebarToggle: () => void;
 }
 
-type FeatureId = 'dashboard' | 'generators' | 'hours' | 'purchase' | 'issue' | 'stock' | 'reports' | 'users' | 'api-keys';
+type FeatureId = 'dashboard' | 'generators' | 'hours' | 'daily-report' | 'purchase' | 'issue' | 'stock' | 'reports' | 'users' | 'api-keys';
 
 const navItems: { id: FeatureId; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'generators', label: 'Generators', icon: Settings },
   { id: 'hours', label: 'Hour Meter Entry', icon: Clock },
+  { id: 'daily-report', label: 'Daily Hour Report', icon: Clock },
   { id: 'purchase', label: 'Fuel Purchase', icon: Fuel },
   { id: 'issue', label: 'Issue Fuel', icon: Droplets },
   { id: 'stock', label: 'Monthly Stock', icon: BarChart3 },
