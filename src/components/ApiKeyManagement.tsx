@@ -221,28 +221,111 @@ export function ApiKeyManagement() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ExternalLink className="w-5 h-5" />
-            API Endpoint
+            API Documentation
           </CardTitle>
-          <CardDescription>Use this endpoint to fetch cost reports from external systems</CardDescription>
+          <CardDescription>Use these endpoints to fetch reports from external systems</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-lg bg-muted p-4 font-mono text-sm">
-            <div className="flex items-center justify-between mb-2">
-              <Badge variant="outline" className="bg-green-500/10 text-green-600">GET</Badge>
-              <Button variant="ghost" size="sm" onClick={() => copyToClipboard(`${window.location.origin}/functions/v1/external-cost-report`)}>
-                <Copy className="w-4 h-4" />
-              </Button>
+        <CardContent className="space-y-6">
+          {/* Authentication Section */}
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <h4 className="font-semibold text-foreground mb-2">🔐 Authentication</h4>
+            <p className="text-sm text-muted-foreground mb-3">
+              All API requests require a Bearer token in the Authorization header:
+            </p>
+            <div className="rounded-lg bg-muted p-3 font-mono text-sm">
+              <code className="text-foreground">Authorization: Bearer {'<YOUR_API_KEY>'}</code>
             </div>
-            <code className="text-foreground break-all">{window.location.origin}/functions/v1/external-cost-report?from=2024-01-01&to=2024-01-31</code>
+            <p className="text-xs text-muted-foreground mt-2">
+              Generate an API key above. Keys with <Badge variant="secondary" className="text-xs">reports:read</Badge> permission can access all report endpoints.
+            </p>
           </div>
-          <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-            <p><strong>Headers:</strong> Authorization: Bearer {'<API_KEY>'}</p>
-            <p><strong>Query Parameters:</strong></p>
-            <ul className="list-disc list-inside ml-4">
-              <li><code>from</code> - Start date (YYYY-MM-DD) - Required</li>
-              <li><code>to</code> - End date (YYYY-MM-DD) - Required</li>
-              <li><code>generatorId</code> - Filter by generator ID - Optional</li>
-            </ul>
+
+          {/* Cost Report Endpoint */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-foreground flex items-center gap-2">
+              📊 Cost Report API
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Get aggregated cost data including fuel usage, running hours, and costs per generator.
+            </p>
+            <div className="rounded-lg bg-muted p-4 font-mono text-sm">
+              <div className="flex items-center justify-between mb-2">
+                <Badge variant="outline" className="bg-green-500/10 text-green-600">GET</Badge>
+                <Button variant="ghost" size="sm" onClick={() => copyToClipboard(`https://rowhywtqfpmnjrodiufu.supabase.co/functions/v1/external-cost-report`)}>
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+              <code className="text-foreground break-all text-xs">
+                https://rowhywtqfpmnjrodiufu.supabase.co/functions/v1/external-cost-report?from=2024-01-01&to=2024-01-31
+              </code>
+            </div>
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p><strong>Query Parameters:</strong></p>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li><code className="bg-muted px-1 rounded">from</code> - Start date (YYYY-MM-DD) - <span className="text-destructive">Required</span></li>
+                <li><code className="bg-muted px-1 rounded">to</code> - End date (YYYY-MM-DD) - <span className="text-destructive">Required</span></li>
+                <li><code className="bg-muted px-1 rounded">generatorId</code> - Filter by generator UUID - Optional</li>
+              </ul>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <p><strong>Response includes:</strong></p>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li>Total running hours per generator</li>
+                <li>Total fuel issued (litres)</li>
+                <li>Average fuel consumption (litres/hour)</li>
+                <li>Total fuel cost and hourly cost</li>
+                <li>Grand totals across all generators</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Hour Readings Endpoint */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-foreground flex items-center gap-2">
+              ⏱️ Daily Hour Readings API
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Get detailed daily hour meter readings with opening/closing hours for each generator.
+            </p>
+            <div className="rounded-lg bg-muted p-4 font-mono text-sm">
+              <div className="flex items-center justify-between mb-2">
+                <Badge variant="outline" className="bg-green-500/10 text-green-600">GET</Badge>
+                <Button variant="ghost" size="sm" onClick={() => copyToClipboard(`https://rowhywtqfpmnjrodiufu.supabase.co/functions/v1/external-hour-readings`)}>
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+              <code className="text-foreground break-all text-xs">
+                https://rowhywtqfpmnjrodiufu.supabase.co/functions/v1/external-hour-readings?from=2024-01-01&to=2024-01-31
+              </code>
+            </div>
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p><strong>Query Parameters:</strong></p>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li><code className="bg-muted px-1 rounded">from</code> - Start date (YYYY-MM-DD) - <span className="text-destructive">Required</span></li>
+                <li><code className="bg-muted px-1 rounded">to</code> - End date (YYYY-MM-DD) - <span className="text-destructive">Required</span></li>
+              </ul>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <p><strong>Response includes:</strong></p>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li>List of active generators with IDs and names</li>
+                <li>Daily readings grouped by date</li>
+                <li>Opening hour, closing hour, and hours run per generator per day</li>
+                <li>Total hours by generator and grand total</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Example Response */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-foreground flex items-center gap-2">
+              📋 Example cURL Request
+            </h4>
+            <div className="rounded-lg bg-muted p-4 font-mono text-xs overflow-x-auto">
+              <pre className="text-foreground whitespace-pre-wrap">{`curl -X GET \\
+  "https://rowhywtqfpmnjrodiufu.supabase.co/functions/v1/external-hour-readings?from=2024-01-01&to=2024-01-31" \\
+  -H "Authorization: Bearer YOUR_API_KEY"`}</pre>
+            </div>
           </div>
         </CardContent>
       </Card>
