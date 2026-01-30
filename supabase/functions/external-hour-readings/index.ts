@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     const { key_id, permissions } = keyData[0];
 
     // Check permissions
-    if (!permissions.includes('read:reports') && !permissions.includes('read:hours')) {
+    if (!permissions.includes('read:reports') && !permissions.includes('reports:read') && !permissions.includes('read:hours') && !permissions.includes('hours:read')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Insufficient permissions' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
