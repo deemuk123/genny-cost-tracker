@@ -6,11 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGenerators, useHourReadings, useAddHourReading } from '@/hooks/useGeneratorData';
 import { hourReadingApi } from '@/services/api';
-import { Clock, AlertCircle, Check, ArrowRight, Loader2, Upload } from 'lucide-react';
+import { Clock, AlertCircle, Check, ArrowRight, Loader2, Upload, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { decimalToHoursMinutes, hoursMinutesToDecimal, formatDecimalAsHoursMinutes } from '@/lib/hourMeterUtils';
 import { HourMeterCsvUpload } from './HourMeterCsvUpload';
+import { HourMeterHistory } from './HourMeterHistory';
 
 interface HoursMinutesInput {
   hours: string;
@@ -196,7 +197,7 @@ export function HourMeterEntry() {
         </p>
       </div>
 
-      {/* Tabs for Manual Entry vs CSV Upload */}
+      {/* Tabs for Manual Entry vs CSV Upload vs History */}
       <Tabs defaultValue="manual" className="w-full">
         <TabsList>
           <TabsTrigger value="manual" className="flex items-center gap-2">
@@ -207,10 +208,18 @@ export function HourMeterEntry() {
             <Upload className="w-4 h-4" />
             CSV Upload
           </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <History className="w-4 h-4" />
+            Edit/Delete
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="csv" className="mt-4">
           <HourMeterCsvUpload />
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4">
+          <HourMeterHistory />
         </TabsContent>
 
         <TabsContent value="manual" className="mt-4 space-y-6">
