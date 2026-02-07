@@ -3,12 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGenerators, useHourReadings, useAddHourReading } from '@/hooks/useGeneratorData';
 import { hourReadingApi } from '@/services/api';
-import { Clock, AlertCircle, Check, ArrowRight, Loader2 } from 'lucide-react';
+import { Clock, AlertCircle, Check, ArrowRight, Loader2, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { decimalToHoursMinutes, hoursMinutesToDecimal, formatDecimalAsHoursMinutes } from '@/lib/hourMeterUtils';
+import { HourMeterCsvUpload } from './HourMeterCsvUpload';
 
 interface HoursMinutesInput {
   hours: string;
@@ -190,10 +192,28 @@ export function HourMeterEntry() {
       <div>
         <h1 className="text-3xl font-heading font-bold text-foreground">Daily Hour Meter Entry</h1>
         <p className="text-muted-foreground mt-1">
-          Enter closing hour readings in HHHH:MM format. Opening hours are auto-filled.
+          Enter closing hour readings or upload historical data via CSV.
         </p>
       </div>
 
+      {/* Tabs for Manual Entry vs CSV Upload */}
+      <Tabs defaultValue="manual" className="w-full">
+        <TabsList>
+          <TabsTrigger value="manual" className="flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            Manual Entry
+          </TabsTrigger>
+          <TabsTrigger value="csv" className="flex items-center gap-2">
+            <Upload className="w-4 h-4" />
+            CSV Upload
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="csv" className="mt-4">
+          <HourMeterCsvUpload />
+        </TabsContent>
+
+        <TabsContent value="manual" className="mt-4 space-y-6">
       {/* Date Selection */}
       <Card>
         <CardContent className="p-6">
@@ -356,6 +376,8 @@ export function HourMeterEntry() {
           })}
         </div>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
