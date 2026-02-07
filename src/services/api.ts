@@ -107,6 +107,25 @@ export const hourReadingApi = {
     return result as HourMeterReading;
   },
 
+  update: async (id: string, data: Partial<Pick<HourMeterReading, 'opening_hour' | 'closing_hour' | 'date' | 'notes'>>): Promise<HourMeterReading> => {
+    const { data: result, error } = await supabase
+      .from('hour_meter_readings')
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return result as HourMeterReading;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const { error } = await supabase
+      .from('hour_meter_readings')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  },
+
   getLastReading: async (generatorId: string): Promise<number> => {
     const { data, error } = await supabase
       .rpc('get_last_hour_reading', { p_generator_id: generatorId });

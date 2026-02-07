@@ -91,6 +91,39 @@ export function useAddHourReading() {
   });
 }
 
+export function useUpdateHourReading() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Pick<HourMeterReading, 'opening_hour' | 'closing_hour' | 'date' | 'notes'>> }) => 
+      hourReadingApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hourReadings'] });
+      toast({ title: 'Hour reading updated' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to update reading', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteHourReading() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: hourReadingApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hourReadings'] });
+      toast({ title: 'Hour reading deleted' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to delete reading', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // Fuel Purchase Hooks
 export function useFuelPurchases(params?: { from?: string; to?: string; fuelType?: string }) {
   return useQuery({
