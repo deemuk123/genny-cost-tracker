@@ -13,59 +13,73 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Fetch user profile and role
   const fetchUserData = useCallback(async (userId: string, email: string) => {
     try {
-      // Get profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('name, is_active')
         .eq('id', userId)
         .single();
 
-      // Get role using the database function
       const { data: roleData } = await supabase
         .rpc('get_user_role', { _user_id: userId });
 
       const role = (roleData as UserRole) || 'viewer';
-      
+
       if (profile && profile.is_active !== false) {
         setUser({
           id: userId,
           name: profile.name || email.split('@')[0],
           email,
           role,
-          token: '', // Token is managed by Supabase
+          token: '',
         });
       } else {
-        // User is deactivated
         await supabase.auth.signOut();
         setUser(null);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
       setUser(null);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
   // Set up auth state listener
   useEffect(() => {
-    // First set up the listener
+    let lastUserId: string | null = null;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          // Use setTimeout to avoid potential race conditions
-          setTimeout(() => {
-            fetchUserData(session.user.id, session.user.email || '');
-          }, 0);
-        } else {
+      (event, session) => {
+        const nextUserId = session?.user?.id ?? null;
+
+        if (!nextUserId) {
+          lastUserId = null;
           setUser(null);
+          setIsLoading(false);
+          return;
         }
-        setIsLoading(false);
+
+        // Skip refetch on token refresh / repeated events for same user
+        if (nextUserId === lastUserId) {
+          setIsLoading(false);
+          return;
+        }
+        lastUserId = nextUserId;
+
+        setIsLoading(true);
+        setTimeout(() => {
+          fetchUserData(session!.user.id, session!.user.email || '');
+        }, 0);
       }
     );
 
-    // Then check for existing session
+    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        fetchUserData(session.user.id, session.user.email || '');
+        if (lastUserId !== session.user.id) {
+          lastUserId = session.user.id;
+          fetchUserData(session.user.id, session.user.email || '');
+        }
       } else {
         setIsLoading(false);
       }
