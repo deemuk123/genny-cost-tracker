@@ -69,6 +69,25 @@ export function FuelIssue() {
 
   const totalFiltered = filteredIssues.reduce((s, i) => s + Number(i.quantity_litres || 0), 0);
 
+  const sortedPurchases = [...fuelPurchases].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  const filteredPurchases = sortedPurchases.filter((p) => {
+    if (purchaseFilter.fuel_type !== 'all' && p.fuel_type !== purchaseFilter.fuel_type) return false;
+    if (purchaseFilter.from && p.date < purchaseFilter.from) return false;
+    if (purchaseFilter.to && p.date > purchaseFilter.to) return false;
+    if (purchaseFilter.search) {
+      const q = purchaseFilter.search.toLowerCase();
+      const hay = `${p.vendor ?? ''} ${p.invoice_number ?? ''} ${p.fuel_type} ${p.notes ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const totalPurchasedLitres = filteredPurchases.reduce((s, p) => s + Number(p.quantity_litres || 0), 0);
+  const totalPurchasedAmount = filteredPurchases.reduce((s, p) => s + Number(p.total_amount || 0), 0);
+
   const handleExportCsv = () => {
     if (filteredIssues.length === 0) {
       toast({ title: 'Nothing to export', description: 'No issues match the current filters.' });
@@ -86,6 +105,24 @@ export function FuelIssue() {
       };
     });
     downloadCsv(`fuel-issues-${format(new Date(), 'yyyyMMdd-HHmm')}.csv`, rows);
+  };
+
+  const handleExportPurchasesCsv = () => {
+    if (filteredPurchases.length === 0) {
+      toast({ title: 'Nothing to export', description: 'No purchases match the current filters.' });
+      return;
+    }
+    const rows = filteredPurchases.map((p) => ({
+      Date: p.date,
+      'Fuel Type': p.fuel_type,
+      'Quantity (L)': Number(p.quantity_litres).toFixed(2),
+      'Rate (per L)': Number(p.rate_per_litre).toFixed(2),
+      'Total Amount': p.total_amount != null ? Number(p.total_amount).toFixed(2) : '',
+      Vendor: p.vendor ?? '',
+      'Invoice #': p.invoice_number ?? '',
+      Notes: p.notes ?? '',
+    }));
+    downloadCsv(`fuel-purchases-${format(new Date(), 'yyyyMMdd-HHmm')}.csv`, rows);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
