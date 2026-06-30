@@ -28,6 +28,7 @@ export function MonthlyStock() {
   const { data: fuelIssues = [], isLoading: loadingIssues } = useFuelIssues();
   const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
   const { data: monthlyStockChecks = [], isLoading: loadingChecks } = useStockChecks();
+  const { data: generators = [] } = useGenerators();
   const addStockCheck = useAddStockCheck();
   
   const nepaliDate = getCurrentNepaliDate();
