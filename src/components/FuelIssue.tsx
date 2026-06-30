@@ -30,12 +30,55 @@ export function FuelIssue() {
     quantity_litres: '',
   });
 
+  const [historyFilter, setHistoryFilter] = useState({
+    generator_id: 'all',
+    fuel_type: 'all' as 'all' | 'diesel' | 'petrol',
+    from: '',
+    to: '',
+    search: '',
+  });
+
   const activeGenerators = generators.filter(g => g.is_active);
   const selectedGenerator = generators.find(g => g.id === formData.generator_id);
-  
-  const recentIssues = [...fuelIssues]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 10);
+
+  const sortedIssues = [...fuelIssues].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  const filteredIssues = sortedIssues.filter((issue) => {
+    const gen = generators.find(g => g.id === issue.generator_id);
+    if (historyFilter.generator_id !== 'all' && issue.generator_id !== historyFilter.generator_id) return false;
+    if (historyFilter.fuel_type !== 'all' && issue.fuel_type !== historyFilter.fuel_type) return false;
+    if (historyFilter.from && issue.date < historyFilter.from) return false;
+    if (historyFilter.to && issue.date > historyFilter.to) return false;
+    if (historyFilter.search) {
+      const q = historyFilter.search.toLowerCase();
+      const hay = `${gen?.name ?? ''} ${issue.fuel_type} ${issue.notes ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const totalFiltered = filteredIssues.reduce((s, i) => s + Number(i.quantity_litres || 0), 0);
+
+  const handleExportCsv = () => {
+    if (filteredIssues.length === 0) {
+      toast({ title: 'Nothing to export', description: 'No issues match the current filters.' });
+      return;
+    }
+    const rows = filteredIssues.map((i) => {
+      const gen = generators.find(g => g.id === i.generator_id);
+      return {
+        Date: i.date,
+        Generator: gen?.name ?? 'Unknown',
+        'Fuel Type': i.fuel_type,
+        'Quantity (L)': Number(i.quantity_litres).toFixed(2),
+        'Stock After Issue (L)': i.stock_after_issue != null ? Number(i.stock_after_issue).toFixed(2) : '',
+        Notes: i.notes ?? '',
+      };
+    });
+    downloadCsv(`fuel-issues-${format(new Date(), 'yyyyMMdd-HHmm')}.csv`, rows);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
