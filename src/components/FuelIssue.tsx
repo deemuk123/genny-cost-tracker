@@ -39,6 +39,13 @@ export function FuelIssue() {
     search: '',
   });
 
+  const [purchaseFilter, setPurchaseFilter] = useState({
+    fuel_type: 'all' as 'all' | 'diesel' | 'petrol',
+    from: '',
+    to: '',
+    search: '',
+  });
+
   const activeGenerators = generators.filter(g => g.is_active);
   const selectedGenerator = generators.find(g => g.id === formData.generator_id);
 
