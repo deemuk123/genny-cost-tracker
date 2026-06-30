@@ -304,22 +304,22 @@ export function FuelIssue() {
           </CardContent>
         </Card>
 
-        {/* Recent Issues */}
+        {/* Latest 10 quick view */}
         <Card>
           <CardHeader>
             <CardTitle>Recent Issues</CardTitle>
           </CardHeader>
           <CardContent>
-            {recentIssues.length === 0 ? (
+            {sortedIssues.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No fuel issues recorded yet.
               </div>
             ) : (
               <div className="space-y-3">
-                {recentIssues.map((issue) => {
+                {sortedIssues.slice(0, 10).map((issue) => {
                   const gen = generators.find(g => g.id === issue.generator_id);
                   return (
-                    <div 
+                    <div
                       key={issue.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                     >
@@ -348,6 +348,125 @@ export function FuelIssue() {
           </CardContent>
         </Card>
       </div>
+
+      {/* All Issues — full history with filters & CSV export */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>All Fuel Issues</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {filteredIssues.length} record{filteredIssues.length === 1 ? '' : 's'} • Total {totalFiltered.toFixed(2)} L
+              </p>
+            </div>
+            <Button variant="outline" onClick={handleExportCsv}>
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Generator</Label>
+              <Select
+                value={historyFilter.generator_id}
+                onValueChange={(v) => setHistoryFilter({ ...historyFilter, generator_id: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All generators</SelectItem>
+                  {generators.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Fuel Type</Label>
+              <Select
+                value={historyFilter.fuel_type}
+                onValueChange={(v) => setHistoryFilter({ ...historyFilter, fuel_type: v as 'all' | 'diesel' | 'petrol' })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="diesel">Diesel</SelectItem>
+                  <SelectItem value="petrol">Petrol</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">From</Label>
+              <Input
+                type="date"
+                value={historyFilter.from}
+                onChange={(e) => setHistoryFilter({ ...historyFilter, from: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">To</Label>
+              <Input
+                type="date"
+                value={historyFilter.to}
+                onChange={(e) => setHistoryFilter({ ...historyFilter, to: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="pl-8"
+                  placeholder="Generator, notes…"
+                  value={historyFilter.search}
+                  onChange={(e) => setHistoryFilter({ ...historyFilter, search: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr className="text-left">
+                  <th className="px-3 py-2 font-medium">Date</th>
+                  <th className="px-3 py-2 font-medium">Generator</th>
+                  <th className="px-3 py-2 font-medium">Fuel</th>
+                  <th className="px-3 py-2 font-medium text-right">Quantity (L)</th>
+                  <th className="px-3 py-2 font-medium text-right">Stock After (L)</th>
+                  <th className="px-3 py-2 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredIssues.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                      No issues match the current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredIssues.map((issue) => {
+                    const gen = generators.find(g => g.id === issue.generator_id);
+                    return (
+                      <tr key={issue.id} className="border-t hover:bg-muted/30">
+                        <td className="px-3 py-2 whitespace-nowrap">{format(new Date(issue.date), 'yyyy-MM-dd')}</td>
+                        <td className="px-3 py-2">{gen?.name ?? 'Unknown'}</td>
+                        <td className="px-3 py-2 capitalize">{issue.fuel_type}</td>
+                        <td className="px-3 py-2 text-right font-medium">{Number(issue.quantity_litres).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">
+                          {issue.stock_after_issue != null ? Number(issue.stock_after_issue).toFixed(2) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{issue.notes ?? ''}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
