@@ -76,21 +76,31 @@ export const generatorApi = {
 // Hour Meter Readings API
 export const hourReadingApi = {
   getAll: async (params?: { generatorId?: string; from?: string; to?: string }): Promise<HourMeterReading[]> => {
-    let query = supabase.from('hour_meter_readings').select('*').order('date', { ascending: false });
-    
-    if (params?.generatorId) {
-      query = query.eq('generator_id', params.generatorId);
+    const PAGE = 1000;
+    const all: HourMeterReading[] = [];
+    let offset = 0;
+    // Paginate to bypass the 1000-row default cap so wide date
+    // ranges (e.g. 2017–2026) return every record, not just 1000.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      let query = supabase
+        .from('hour_meter_readings')
+        .select('*')
+        .order('date', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+
+      if (params?.generatorId) query = query.eq('generator_id', params.generatorId);
+      if (params?.from) query = query.gte('date', params.from);
+      if (params?.to) query = query.lte('date', params.to);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      const batch = (data ?? []) as HourMeterReading[];
+      all.push(...batch);
+      if (batch.length < PAGE) break;
+      offset += PAGE;
     }
-    if (params?.from) {
-      query = query.gte('date', params.from);
-    }
-    if (params?.to) {
-      query = query.lte('date', params.to);
-    }
-    
-    const { data, error } = await query;
-    if (error) throw error;
-    return data as HourMeterReading[];
+    return all;
   },
 
   create: async (data: Omit<HourMeterReading, 'id' | 'created_at' | 'hours_run' | 'created_by'>): Promise<HourMeterReading> => {
@@ -196,21 +206,29 @@ export const fuelStockApi = {
 // Fuel Issue API
 export const fuelIssueApi = {
   getAll: async (params?: { generatorId?: string; from?: string; to?: string }): Promise<FuelIssue[]> => {
-    let query = supabase.from('fuel_issues').select('*').order('date', { ascending: false });
-    
-    if (params?.generatorId) {
-      query = query.eq('generator_id', params.generatorId);
+    const PAGE = 1000;
+    const all: FuelIssue[] = [];
+    let offset = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      let query = supabase
+        .from('fuel_issues')
+        .select('*')
+        .order('date', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+
+      if (params?.generatorId) query = query.eq('generator_id', params.generatorId);
+      if (params?.from) query = query.gte('date', params.from);
+      if (params?.to) query = query.lte('date', params.to);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      const batch = (data ?? []) as FuelIssue[];
+      all.push(...batch);
+      if (batch.length < PAGE) break;
+      offset += PAGE;
     }
-    if (params?.from) {
-      query = query.gte('date', params.from);
-    }
-    if (params?.to) {
-      query = query.lte('date', params.to);
-    }
-    
-    const { data, error } = await query;
-    if (error) throw error;
-    return data as FuelIssue[];
+    return all;
   },
 
   create: async (data: Omit<FuelIssue, 'id' | 'created_at' | 'stock_after_issue' | 'created_by'>): Promise<FuelIssue> => {
