@@ -26,8 +26,8 @@ export function HourMeterHistory() {
 
   const { data: hourReadings = [], isLoading: loadingReadings } = useHourReadings({
     generatorId: selectedGenerator !== 'all' ? selectedGenerator : undefined,
-    from: fromDate,
-    to: toDate,
+    from: fromDate || undefined,
+    to: toDate || undefined,
   });
 
   const activeGenerators = generators.filter(g => g.is_active);
