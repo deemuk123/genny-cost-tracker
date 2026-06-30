@@ -22,6 +22,7 @@ export function FuelIssue() {
   const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
   const { data: fuelIssues = [], isLoading: loadingIssues } = useFuelIssues();
   const { data: fuelStock = defaultStock, isLoading: loadingStock } = useFuelStock();
+  const { data: fuelPurchases = [], isLoading: loadingPurchases } = useFuelPurchases();
   const addFuelIssue = useAddFuelIssue();
   
   const [formData, setFormData] = useState({
