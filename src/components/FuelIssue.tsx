@@ -10,7 +10,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { useGenerators, useFuelIssues, useFuelStock, useAddFuelIssue } from '@/hooks/useGeneratorData';
+import { useGenerators, useFuelIssues, useFuelStock, useAddFuelIssue, useFuelPurchases } from '@/hooks/useGeneratorData';
 import { FuelStockLevels } from '@/types/generator';
 import { Droplets, AlertTriangle, ArrowRight, Fuel, Loader2, Download, Search } from 'lucide-react';
 import { format } from 'date-fns';
