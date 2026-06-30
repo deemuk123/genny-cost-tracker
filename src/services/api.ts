@@ -206,21 +206,29 @@ export const fuelStockApi = {
 // Fuel Issue API
 export const fuelIssueApi = {
   getAll: async (params?: { generatorId?: string; from?: string; to?: string }): Promise<FuelIssue[]> => {
-    let query = supabase.from('fuel_issues').select('*').order('date', { ascending: false });
-    
-    if (params?.generatorId) {
-      query = query.eq('generator_id', params.generatorId);
+    const PAGE = 1000;
+    const all: FuelIssue[] = [];
+    let offset = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      let query = supabase
+        .from('fuel_issues')
+        .select('*')
+        .order('date', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+
+      if (params?.generatorId) query = query.eq('generator_id', params.generatorId);
+      if (params?.from) query = query.gte('date', params.from);
+      if (params?.to) query = query.lte('date', params.to);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      const batch = (data ?? []) as FuelIssue[];
+      all.push(...batch);
+      if (batch.length < PAGE) break;
+      offset += PAGE;
     }
-    if (params?.from) {
-      query = query.gte('date', params.from);
-    }
-    if (params?.to) {
-      query = query.lte('date', params.to);
-    }
-    
-    const { data, error } = await query;
-    if (error) throw error;
-    return data as FuelIssue[];
+    return all;
   },
 
   create: async (data: Omit<FuelIssue, 'id' | 'created_at' | 'stock_after_issue' | 'created_by'>): Promise<FuelIssue> => {
