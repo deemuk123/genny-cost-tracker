@@ -12,9 +12,11 @@ import {
 } from '@/components/ui/select';
 import { useFuelPurchases, useFuelIssues, useFuelStock, useStockChecks, useAddStockCheck } from '@/hooks/useGeneratorData';
 import { FuelType } from '@/types/generator';
-import { BarChart3, Check, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { BarChart3, Check, TrendingUp, TrendingDown, Loader2, Download } from 'lucide-react';
 import { format, subMonths } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { downloadCsv } from '@/lib/csvExport';
+import { useGenerators } from '@/hooks/useGeneratorData';
 import { 
   getCurrentNepaliDate,
   getNepaliMonthName,
