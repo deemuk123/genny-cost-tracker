@@ -231,11 +231,17 @@ export function MonthlyStock() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-heading font-bold text-foreground">Monthly Fuel Stock</h1>
-        <p className="text-muted-foreground mt-1">
-          Perform physical stock count and compare with theoretical balance
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-heading font-bold text-foreground">Monthly Fuel Stock</h1>
+          <p className="text-muted-foreground mt-1">
+            Perform physical stock count and compare with theoretical balance
+          </p>
+        </div>
+        <Button variant="outline" onClick={handleExportMovementCsv}>
+          <Download className="w-4 h-4" />
+          Export Stock In/Out (CSV)
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
