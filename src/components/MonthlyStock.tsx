@@ -140,6 +140,79 @@ export function MonthlyStock() {
     ? existingCheck.variance || 0 
     : (physicalStock ? parseFloat(physicalStock) - stockMovement.theoretical : 0);
 
+  const handleExportMovementCsv = () => {
+    const purchaseRows = fuelPurchases
+      .filter((p) => {
+        const d = new Date(p.date);
+        return p.fuel_type === fuelType && d >= monthStart && d <= monthEnd;
+      })
+      .map((p) => ({
+        Date: p.date,
+        Type: 'IN — Purchase',
+        'Fuel Type': p.fuel_type,
+        Reference: p.vendor ?? '',
+        'Invoice #': p.invoice_number ?? '',
+        'Quantity In (L)': Number(p.quantity_litres).toFixed(2),
+        'Quantity Out (L)': '',
+        'Rate (₹/L)': p.rate_per_litre != null ? Number(p.rate_per_litre).toFixed(2) : '',
+        'Amount (₹)': p.total_amount != null ? Number(p.total_amount).toFixed(2) : '',
+        Notes: p.notes ?? '',
+      }));
+
+    const issueRows = fuelIssues
+      .filter((i) => {
+        const d = new Date(i.date);
+        return i.fuel_type === fuelType && d >= monthStart && d <= monthEnd;
+      })
+      .map((i) => {
+        const gen = generators.find((g) => g.id === i.generator_id);
+        return {
+          Date: i.date,
+          Type: 'OUT — Issue',
+          'Fuel Type': i.fuel_type,
+          Reference: gen?.name ?? 'Unknown generator',
+          'Invoice #': '',
+          'Quantity In (L)': '',
+          'Quantity Out (L)': Number(i.quantity_litres).toFixed(2),
+          'Rate (₹/L)': '',
+          'Amount (₹)': '',
+          Notes: i.notes ?? '',
+        };
+      });
+
+    const combined = [...purchaseRows, ...issueRows].sort((a, b) =>
+      a.Date.localeCompare(b.Date)
+    );
+
+    if (combined.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'No purchases or issues for the selected month.',
+      });
+      return;
+    }
+
+    const summary = [
+      {
+        Date: '',
+        Type: 'SUMMARY',
+        'Fuel Type': fuelType,
+        Reference: `${getNepaliMonthName(selectedMonth)} ${selectedYear} BS`,
+        'Invoice #': '',
+        'Quantity In (L)': stockMovement.purchases.toFixed(2),
+        'Quantity Out (L)': stockMovement.issues.toFixed(2),
+        'Rate (₹/L)': '',
+        'Amount (₹)': '',
+        Notes: `Opening ${stockMovement.opening.toFixed(2)} L • Theoretical closing ${stockMovement.theoretical.toFixed(2)} L`,
+      },
+    ];
+
+    downloadCsv(
+      `${fuelType}-stock-movement-${selectedYear}-${selectedMonth}.csv`,
+      [...combined, ...summary]
+    );
+  };
+
   // Recent stock checks
   const recentChecks = [...monthlyStockChecks]
     .sort((a, b) => new Date(b.check_date).getTime() - new Date(a.check_date).getTime())
