@@ -10,7 +10,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { useGenerators, useFuelIssues, useFuelStock, useAddFuelIssue } from '@/hooks/useGeneratorData';
+import { useGenerators, useFuelIssues, useFuelStock, useAddFuelIssue, useFuelPurchases } from '@/hooks/useGeneratorData';
 import { FuelStockLevels } from '@/types/generator';
 import { Droplets, AlertTriangle, ArrowRight, Fuel, Loader2, Download, Search } from 'lucide-react';
 import { format } from 'date-fns';
@@ -22,6 +22,7 @@ export function FuelIssue() {
   const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
   const { data: fuelIssues = [], isLoading: loadingIssues } = useFuelIssues();
   const { data: fuelStock = defaultStock, isLoading: loadingStock } = useFuelStock();
+  const { data: fuelPurchases = [], isLoading: loadingPurchases } = useFuelPurchases();
   const addFuelIssue = useAddFuelIssue();
   
   const [formData, setFormData] = useState({
@@ -32,6 +33,13 @@ export function FuelIssue() {
 
   const [historyFilter, setHistoryFilter] = useState({
     generator_id: 'all',
+    fuel_type: 'all' as 'all' | 'diesel' | 'petrol',
+    from: '',
+    to: '',
+    search: '',
+  });
+
+  const [purchaseFilter, setPurchaseFilter] = useState({
     fuel_type: 'all' as 'all' | 'diesel' | 'petrol',
     from: '',
     to: '',
@@ -61,6 +69,25 @@ export function FuelIssue() {
 
   const totalFiltered = filteredIssues.reduce((s, i) => s + Number(i.quantity_litres || 0), 0);
 
+  const sortedPurchases = [...fuelPurchases].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  const filteredPurchases = sortedPurchases.filter((p) => {
+    if (purchaseFilter.fuel_type !== 'all' && p.fuel_type !== purchaseFilter.fuel_type) return false;
+    if (purchaseFilter.from && p.date < purchaseFilter.from) return false;
+    if (purchaseFilter.to && p.date > purchaseFilter.to) return false;
+    if (purchaseFilter.search) {
+      const q = purchaseFilter.search.toLowerCase();
+      const hay = `${p.vendor ?? ''} ${p.invoice_number ?? ''} ${p.fuel_type} ${p.notes ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const totalPurchasedLitres = filteredPurchases.reduce((s, p) => s + Number(p.quantity_litres || 0), 0);
+  const totalPurchasedAmount = filteredPurchases.reduce((s, p) => s + Number(p.total_amount || 0), 0);
+
   const handleExportCsv = () => {
     if (filteredIssues.length === 0) {
       toast({ title: 'Nothing to export', description: 'No issues match the current filters.' });
@@ -78,6 +105,24 @@ export function FuelIssue() {
       };
     });
     downloadCsv(`fuel-issues-${format(new Date(), 'yyyyMMdd-HHmm')}.csv`, rows);
+  };
+
+  const handleExportPurchasesCsv = () => {
+    if (filteredPurchases.length === 0) {
+      toast({ title: 'Nothing to export', description: 'No purchases match the current filters.' });
+      return;
+    }
+    const rows = filteredPurchases.map((p) => ({
+      Date: p.date,
+      'Fuel Type': p.fuel_type,
+      'Quantity (L)': Number(p.quantity_litres).toFixed(2),
+      'Rate (per L)': Number(p.rate_per_litre).toFixed(2),
+      'Total Amount': p.total_amount != null ? Number(p.total_amount).toFixed(2) : '',
+      Vendor: p.vendor ?? '',
+      'Invoice #': p.invoice_number ?? '',
+      Notes: p.notes ?? '',
+    }));
+    downloadCsv(`fuel-purchases-${format(new Date(), 'yyyyMMdd-HHmm')}.csv`, rows);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -147,7 +192,7 @@ export function FuelIssue() {
     return fuelStock[selectedGenerator.fuel_type] - quantity;
   };
 
-  const isLoading = loadingGenerators || loadingIssues || loadingStock;
+  const isLoading = loadingGenerators || loadingIssues || loadingStock || loadingPurchases;
 
   if (isLoading) {
     return (
@@ -461,6 +506,109 @@ export function FuelIssue() {
                       </tr>
                     );
                   })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* All Fuel Purchases — full history with filters & CSV export */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>All Fuel Purchases</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {filteredPurchases.length} record{filteredPurchases.length === 1 ? '' : 's'} • Total {totalPurchasedLitres.toFixed(2)} L • Amount {totalPurchasedAmount.toFixed(2)}
+              </p>
+            </div>
+            <Button variant="outline" onClick={handleExportPurchasesCsv}>
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Fuel Type</Label>
+              <Select
+                value={purchaseFilter.fuel_type}
+                onValueChange={(v) => setPurchaseFilter({ ...purchaseFilter, fuel_type: v as 'all' | 'diesel' | 'petrol' })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="diesel">Diesel</SelectItem>
+                  <SelectItem value="petrol">Petrol</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">From</Label>
+              <Input
+                type="date"
+                value={purchaseFilter.from}
+                onChange={(e) => setPurchaseFilter({ ...purchaseFilter, from: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">To</Label>
+              <Input
+                type="date"
+                value={purchaseFilter.to}
+                onChange={(e) => setPurchaseFilter({ ...purchaseFilter, to: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="pl-8"
+                  placeholder="Vendor, invoice, notes…"
+                  value={purchaseFilter.search}
+                  onChange={(e) => setPurchaseFilter({ ...purchaseFilter, search: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr className="text-left">
+                  <th className="px-3 py-2 font-medium">Date</th>
+                  <th className="px-3 py-2 font-medium">Fuel</th>
+                  <th className="px-3 py-2 font-medium text-right">Quantity (L)</th>
+                  <th className="px-3 py-2 font-medium text-right">Rate</th>
+                  <th className="px-3 py-2 font-medium text-right">Total</th>
+                  <th className="px-3 py-2 font-medium">Vendor</th>
+                  <th className="px-3 py-2 font-medium">Invoice #</th>
+                  <th className="px-3 py-2 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPurchases.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
+                      No purchases match the current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPurchases.map((p) => (
+                    <tr key={p.id} className="border-t hover:bg-muted/30">
+                      <td className="px-3 py-2 whitespace-nowrap">{format(new Date(p.date), 'yyyy-MM-dd')}</td>
+                      <td className="px-3 py-2 capitalize">{p.fuel_type}</td>
+                      <td className="px-3 py-2 text-right font-medium">{Number(p.quantity_litres).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right">{Number(p.rate_per_litre).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-medium">{p.total_amount != null ? Number(p.total_amount).toFixed(2) : '—'}</td>
+                      <td className="px-3 py-2">{p.vendor ?? ''}</td>
+                      <td className="px-3 py-2">{p.invoice_number ?? ''}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{p.notes ?? ''}</td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
