@@ -12,9 +12,10 @@ import {
 } from '@/components/ui/select';
 import { useGenerators, useFuelIssues, useFuelStock, useAddFuelIssue } from '@/hooks/useGeneratorData';
 import { FuelStockLevels } from '@/types/generator';
-import { Droplets, AlertTriangle, ArrowRight, Fuel, Loader2 } from 'lucide-react';
+import { Droplets, AlertTriangle, ArrowRight, Fuel, Loader2, Download, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { downloadCsv } from '@/lib/csvExport';
 
 export function FuelIssue() {
   const defaultStock: FuelStockLevels = { diesel: 0, petrol: 0 };
@@ -29,12 +30,55 @@ export function FuelIssue() {
     quantity_litres: '',
   });
 
+  const [historyFilter, setHistoryFilter] = useState({
+    generator_id: 'all',
+    fuel_type: 'all' as 'all' | 'diesel' | 'petrol',
+    from: '',
+    to: '',
+    search: '',
+  });
+
   const activeGenerators = generators.filter(g => g.is_active);
   const selectedGenerator = generators.find(g => g.id === formData.generator_id);
-  
-  const recentIssues = [...fuelIssues]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 10);
+
+  const sortedIssues = [...fuelIssues].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  const filteredIssues = sortedIssues.filter((issue) => {
+    const gen = generators.find(g => g.id === issue.generator_id);
+    if (historyFilter.generator_id !== 'all' && issue.generator_id !== historyFilter.generator_id) return false;
+    if (historyFilter.fuel_type !== 'all' && issue.fuel_type !== historyFilter.fuel_type) return false;
+    if (historyFilter.from && issue.date < historyFilter.from) return false;
+    if (historyFilter.to && issue.date > historyFilter.to) return false;
+    if (historyFilter.search) {
+      const q = historyFilter.search.toLowerCase();
+      const hay = `${gen?.name ?? ''} ${issue.fuel_type} ${issue.notes ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const totalFiltered = filteredIssues.reduce((s, i) => s + Number(i.quantity_litres || 0), 0);
+
+  const handleExportCsv = () => {
+    if (filteredIssues.length === 0) {
+      toast({ title: 'Nothing to export', description: 'No issues match the current filters.' });
+      return;
+    }
+    const rows = filteredIssues.map((i) => {
+      const gen = generators.find(g => g.id === i.generator_id);
+      return {
+        Date: i.date,
+        Generator: gen?.name ?? 'Unknown',
+        'Fuel Type': i.fuel_type,
+        'Quantity (L)': Number(i.quantity_litres).toFixed(2),
+        'Stock After Issue (L)': i.stock_after_issue != null ? Number(i.stock_after_issue).toFixed(2) : '',
+        Notes: i.notes ?? '',
+      };
+    });
+    downloadCsv(`fuel-issues-${format(new Date(), 'yyyyMMdd-HHmm')}.csv`, rows);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,22 +304,22 @@ export function FuelIssue() {
           </CardContent>
         </Card>
 
-        {/* Recent Issues */}
+        {/* Latest 10 quick view */}
         <Card>
           <CardHeader>
             <CardTitle>Recent Issues</CardTitle>
           </CardHeader>
           <CardContent>
-            {recentIssues.length === 0 ? (
+            {sortedIssues.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No fuel issues recorded yet.
               </div>
             ) : (
               <div className="space-y-3">
-                {recentIssues.map((issue) => {
+                {sortedIssues.slice(0, 10).map((issue) => {
                   const gen = generators.find(g => g.id === issue.generator_id);
                   return (
-                    <div 
+                    <div
                       key={issue.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                     >
@@ -304,6 +348,125 @@ export function FuelIssue() {
           </CardContent>
         </Card>
       </div>
+
+      {/* All Issues — full history with filters & CSV export */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>All Fuel Issues</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {filteredIssues.length} record{filteredIssues.length === 1 ? '' : 's'} • Total {totalFiltered.toFixed(2)} L
+              </p>
+            </div>
+            <Button variant="outline" onClick={handleExportCsv}>
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Generator</Label>
+              <Select
+                value={historyFilter.generator_id}
+                onValueChange={(v) => setHistoryFilter({ ...historyFilter, generator_id: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All generators</SelectItem>
+                  {generators.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Fuel Type</Label>
+              <Select
+                value={historyFilter.fuel_type}
+                onValueChange={(v) => setHistoryFilter({ ...historyFilter, fuel_type: v as 'all' | 'diesel' | 'petrol' })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="diesel">Diesel</SelectItem>
+                  <SelectItem value="petrol">Petrol</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">From</Label>
+              <Input
+                type="date"
+                value={historyFilter.from}
+                onChange={(e) => setHistoryFilter({ ...historyFilter, from: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">To</Label>
+              <Input
+                type="date"
+                value={historyFilter.to}
+                onChange={(e) => setHistoryFilter({ ...historyFilter, to: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="pl-8"
+                  placeholder="Generator, notes…"
+                  value={historyFilter.search}
+                  onChange={(e) => setHistoryFilter({ ...historyFilter, search: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr className="text-left">
+                  <th className="px-3 py-2 font-medium">Date</th>
+                  <th className="px-3 py-2 font-medium">Generator</th>
+                  <th className="px-3 py-2 font-medium">Fuel</th>
+                  <th className="px-3 py-2 font-medium text-right">Quantity (L)</th>
+                  <th className="px-3 py-2 font-medium text-right">Stock After (L)</th>
+                  <th className="px-3 py-2 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredIssues.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                      No issues match the current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredIssues.map((issue) => {
+                    const gen = generators.find(g => g.id === issue.generator_id);
+                    return (
+                      <tr key={issue.id} className="border-t hover:bg-muted/30">
+                        <td className="px-3 py-2 whitespace-nowrap">{format(new Date(issue.date), 'yyyy-MM-dd')}</td>
+                        <td className="px-3 py-2">{gen?.name ?? 'Unknown'}</td>
+                        <td className="px-3 py-2 capitalize">{issue.fuel_type}</td>
+                        <td className="px-3 py-2 text-right font-medium">{Number(issue.quantity_litres).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">
+                          {issue.stock_after_issue != null ? Number(issue.stock_after_issue).toFixed(2) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{issue.notes ?? ''}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

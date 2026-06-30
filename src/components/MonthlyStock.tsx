@@ -12,9 +12,11 @@ import {
 } from '@/components/ui/select';
 import { useFuelPurchases, useFuelIssues, useFuelStock, useStockChecks, useAddStockCheck } from '@/hooks/useGeneratorData';
 import { FuelType } from '@/types/generator';
-import { BarChart3, Check, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { BarChart3, Check, TrendingUp, TrendingDown, Loader2, Download } from 'lucide-react';
 import { format, subMonths } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { downloadCsv } from '@/lib/csvExport';
+import { useGenerators } from '@/hooks/useGeneratorData';
 import { 
   getCurrentNepaliDate,
   getNepaliMonthName,
@@ -26,6 +28,7 @@ export function MonthlyStock() {
   const { data: fuelIssues = [], isLoading: loadingIssues } = useFuelIssues();
   const { data: fuelStock = { diesel: 0, petrol: 0 }, isLoading: loadingStock } = useFuelStock();
   const { data: monthlyStockChecks = [], isLoading: loadingChecks } = useStockChecks();
+  const { data: generators = [] } = useGenerators();
   const addStockCheck = useAddStockCheck();
   
   const nepaliDate = getCurrentNepaliDate();
@@ -137,6 +140,79 @@ export function MonthlyStock() {
     ? existingCheck.variance || 0 
     : (physicalStock ? parseFloat(physicalStock) - stockMovement.theoretical : 0);
 
+  const handleExportMovementCsv = () => {
+    const purchaseRows = fuelPurchases
+      .filter((p) => {
+        const d = new Date(p.date);
+        return p.fuel_type === fuelType && d >= monthStart && d <= monthEnd;
+      })
+      .map((p) => ({
+        Date: p.date,
+        Type: 'IN — Purchase',
+        'Fuel Type': p.fuel_type,
+        Reference: p.vendor ?? '',
+        'Invoice #': p.invoice_number ?? '',
+        'Quantity In (L)': Number(p.quantity_litres).toFixed(2),
+        'Quantity Out (L)': '',
+        'Rate (₹/L)': p.rate_per_litre != null ? Number(p.rate_per_litre).toFixed(2) : '',
+        'Amount (₹)': p.total_amount != null ? Number(p.total_amount).toFixed(2) : '',
+        Notes: p.notes ?? '',
+      }));
+
+    const issueRows = fuelIssues
+      .filter((i) => {
+        const d = new Date(i.date);
+        return i.fuel_type === fuelType && d >= monthStart && d <= monthEnd;
+      })
+      .map((i) => {
+        const gen = generators.find((g) => g.id === i.generator_id);
+        return {
+          Date: i.date,
+          Type: 'OUT — Issue',
+          'Fuel Type': i.fuel_type,
+          Reference: gen?.name ?? 'Unknown generator',
+          'Invoice #': '',
+          'Quantity In (L)': '',
+          'Quantity Out (L)': Number(i.quantity_litres).toFixed(2),
+          'Rate (₹/L)': '',
+          'Amount (₹)': '',
+          Notes: i.notes ?? '',
+        };
+      });
+
+    const combined = [...purchaseRows, ...issueRows].sort((a, b) =>
+      a.Date.localeCompare(b.Date)
+    );
+
+    if (combined.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'No purchases or issues for the selected month.',
+      });
+      return;
+    }
+
+    const summary = [
+      {
+        Date: '',
+        Type: 'SUMMARY',
+        'Fuel Type': fuelType,
+        Reference: `${getNepaliMonthName(selectedMonth)} ${selectedYear} BS`,
+        'Invoice #': '',
+        'Quantity In (L)': stockMovement.purchases.toFixed(2),
+        'Quantity Out (L)': stockMovement.issues.toFixed(2),
+        'Rate (₹/L)': '',
+        'Amount (₹)': '',
+        Notes: `Opening ${stockMovement.opening.toFixed(2)} L • Theoretical closing ${stockMovement.theoretical.toFixed(2)} L`,
+      },
+    ];
+
+    downloadCsv(
+      `${fuelType}-stock-movement-${selectedYear}-${selectedMonth}.csv`,
+      [...combined, ...summary]
+    );
+  };
+
   // Recent stock checks
   const recentChecks = [...monthlyStockChecks]
     .sort((a, b) => new Date(b.check_date).getTime() - new Date(a.check_date).getTime())
@@ -155,11 +231,17 @@ export function MonthlyStock() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-heading font-bold text-foreground">Monthly Fuel Stock</h1>
-        <p className="text-muted-foreground mt-1">
-          Perform physical stock count and compare with theoretical balance
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-heading font-bold text-foreground">Monthly Fuel Stock</h1>
+          <p className="text-muted-foreground mt-1">
+            Perform physical stock count and compare with theoretical balance
+          </p>
+        </div>
+        <Button variant="outline" onClick={handleExportMovementCsv}>
+          <Download className="w-4 h-4" />
+          Export Stock In/Out (CSV)
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
