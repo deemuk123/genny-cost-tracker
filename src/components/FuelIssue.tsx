@@ -12,9 +12,10 @@ import {
 } from '@/components/ui/select';
 import { useGenerators, useFuelIssues, useFuelStock, useAddFuelIssue } from '@/hooks/useGeneratorData';
 import { FuelStockLevels } from '@/types/generator';
-import { Droplets, AlertTriangle, ArrowRight, Fuel, Loader2 } from 'lucide-react';
+import { Droplets, AlertTriangle, ArrowRight, Fuel, Loader2, Download, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { downloadCsv } from '@/lib/csvExport';
 
 export function FuelIssue() {
   const defaultStock: FuelStockLevels = { diesel: 0, petrol: 0 };
