@@ -192,7 +192,7 @@ export function FuelIssue() {
     return fuelStock[selectedGenerator.fuel_type] - quantity;
   };
 
-  const isLoading = loadingGenerators || loadingIssues || loadingStock;
+  const isLoading = loadingGenerators || loadingIssues || loadingStock || loadingPurchases;
 
   if (isLoading) {
     return (
