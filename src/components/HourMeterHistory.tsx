@@ -9,15 +9,15 @@ import { useGenerators, useHourReadings } from '@/hooks/useGeneratorData';
 import { HourMeterReading, Generator } from '@/types/generator';
 import { formatDecimalAsHoursMinutes } from '@/lib/hourMeterUtils';
 import { Pencil, Trash2, Loader2, History, Search } from 'lucide-react';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { HourMeterEditDialog } from './HourMeterEditDialog';
 import { HourMeterDeleteDialog } from './HourMeterDeleteDialog';
 
 export function HourMeterHistory() {
   const { data: generators = [], isLoading: loadingGenerators } = useGenerators();
   const [selectedGenerator, setSelectedGenerator] = useState<string>('all');
-  const [fromDate, setFromDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [toDate, setToDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   
   const [editReading, setEditReading] = useState<HourMeterReading | null>(null);
   const [deleteReading, setDeleteReading] = useState<HourMeterReading | null>(null);
