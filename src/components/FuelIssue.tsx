@@ -531,22 +531,6 @@ export function FuelIssue() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">From</Label>
-              <Input
-                type="date"
-                value={purchaseFilter.from}
-                onChange={(e) => setPurchaseFilter({ ...purchaseFilter, from: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">To</Label>
-              <Input
-                type="date"
-                value={purchaseFilter.to}
-                onChange={(e) => setPurchaseFilter({ ...purchaseFilter, to: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1">
               <Label className="text-xs">Search</Label>
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
